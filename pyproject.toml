@@ -1,0 +1,18 @@
+[project]
+name = "sample-best-practices-for-life-science-research-agents"
+version = "0.1.0"
+description = "Sample best practices for life science research agents."
+readme = "README.md"
+requires-python = ">=3.12.9"
+authors = [
+  { name = "Brian Loyal", email = "bloyal@amazon.com" },
+  { name = "Hasan Poonawala", email = "hpoonawa@amazon.co.uk" }
+]
+dependencies = [
+  "bedrock-agentcore",
+  "bedrock-agentcore-starter-toolkit",
+  "boto3",
+  "click",
+  "strands-agents",
+  "strands-agents-tools",
+]
