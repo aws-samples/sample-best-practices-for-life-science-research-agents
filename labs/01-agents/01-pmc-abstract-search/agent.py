@@ -4,13 +4,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from search_pmc import search_pmc_tool
 from strands import Agent, tool
 from strands.models import BedrockModel
-from variables import MODEL_ID, SYSTEM_PROMPT
-
-
-def debugger_callback_handler(**kwargs):
-    # Print the values in kwargs so that we can see everything
-    print(kwargs)
-
+from config import MODEL_ID, SYSTEM_PROMPT
 
 app = BedrockAgentCoreApp()
 
@@ -21,7 +15,6 @@ agent = Agent(
     model=model,
     tools=[search_pmc_tool],
     system_prompt=SYSTEM_PROMPT,
-    callback_handler=debugger_callback_handler,
 )
 
 
