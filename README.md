@@ -12,7 +12,7 @@ After cloning this repository in JupyterLab, open a terminal and run:
 
 ```bash
 cd sample-best-practices-for-life-science-research-agents
-pip install -e .
+pip install .
 ```
 
 This installs all dependencies including the interactive chat CLI.
