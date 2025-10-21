@@ -1,2 +1,5 @@
 .venv
 build
+indexes
+my_papers
+__pycache__
