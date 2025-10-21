@@ -14,6 +14,9 @@ from strands import tool
 # Global configuration for commercial use filtering
 COMMERCIAL_USE_ONLY = False
 
+# Global configuration to rerank results by number by incoming references
+REFERENCED_BY_RERANK = True
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,  # Set the root logger level
@@ -31,9 +34,8 @@ ReferenceDict = Dict[str, str]
 
 def search_pmc(
     query: str,
-    max_results: int = 100,
-    max_records: int = 10,
-    rerank: str = "referenced_by",
+    max_search_result_count: int = 100,
+    max_filtered_result_count: int = 10,
 ) -> dict:
     """
     Search PMC for articles matching the query with ToolResult format.
@@ -45,9 +47,8 @@ def search_pmc(
 
     Args:
         - query (required): The search query for PMC using standard PMC search syntax
-        - max_results (optional): Maximum number of results to fetch from initial search (default: 100, range: 1-1000)
-        - max_records (optional): Maximum number of articles to return in final results (range: 1-100)
-        - rerank (optional): Reranking method to apply (default: "referenced_by", options: ["referenced_by"])
+        - max_search_result_count (optional): Maximum number of results to fetch from initial search (default: 100, range: 1-1000)
+        - max_filtered_result_count (optional): Maximum number of articles to return in final, filtered results (range: 1-100)
 
     Returns:
         Dictionary with the following structure:
@@ -82,17 +83,16 @@ def search_pmc(
         # Basic search with citation ranking
         input = {
             "query": "CRISPR gene editing",
-            "max_results": 50,
-            "max_records": 10
+            "max_search_result_count": 50,
+            "max_filtered_result_count": 10
         }
         result = search_pmc(input)
 
         # Advanced search with relative publication date
         input = {
             "query": 'mRNA vaccine COVID-19 AND "last 2 years"[dp]',
-            "max_results": 200,
-            "max_records": 20,
-            "rerank": "referenced_by"
+            "max_search_result_count": 200,
+            "max_filtered_result_count": 20
         }
         result = search_pmc(tool_input)
 
@@ -127,7 +127,7 @@ def search_pmc(
         search_params = {
             "db": "pmc",
             "term": filtered_query,
-            "retmax": max_results,
+            "retmax": max_search_result_count,
             "retmode": "json",
             "sort": "relevance",
         }
@@ -227,18 +227,18 @@ def search_pmc(
             }
 
         # Apply reranking if requested
-        if rerank == "referenced_by":
+        if REFERENCED_BY_RERANK:
             try:
                 logger.info("Calculating citation relationships and ranking articles")
                 enhanced_articles = _calculate_referenced_by_counts(articles)
                 ranked_articles = _rank_by_citations(enhanced_articles)
                 logger.info("Citation ranking completed successfully")
 
-                # Apply max_records limit to ranked results
-                if max_records is not None:
-                    final_results = ranked_articles[:max_records]
+                # Apply max_filtered_result_count limit to ranked results
+                if max_filtered_result_count is not None:
+                    final_results = ranked_articles[:max_filtered_result_count]
                     logger.info(
-                        f"Applied max_records limit: returning {len(final_results)} of {len(ranked_articles)} articles"
+                        f"Applied max_filtered_result_count limit: returning {len(final_results)} of {len(ranked_articles)} articles"
                     )
                 else:
                     final_results = ranked_articles
@@ -246,7 +246,7 @@ def search_pmc(
                 _print_fetch_results(final_results, n=3)
 
                 # Format search results using article formatting functions
-                # Pass the total before max_records limit for proper summary
+                # Pass the total before max_filtered_result_count limit for proper summary
                 total_before_limit = len(ranked_articles)
                 try:
                     formatted_content = _format_article_list(
@@ -280,11 +280,11 @@ def search_pmc(
             logger.info("Skipping citation-based reranking")
             warning_message = None
 
-        # Return original results (either when rerank=None or as fallback)
-        if max_records is not None:
-            final_results = articles[:max_records]
+        # Return original results (either when REFERENCED_BY_RERANK=None or as fallback)
+        if max_filtered_result_count is not None:
+            final_results = articles[:max_filtered_result_count]
             logger.info(
-                f"Applied max_records limit: returning {len(final_results)} of {len(articles)} articles"
+                f"Applied max_filtered_result_count limit: returning {len(final_results)} of {len(articles)} articles"
             )
         else:
             final_results = articles
@@ -292,7 +292,7 @@ def search_pmc(
         _print_fetch_results(final_results, n=10)
 
         # Format search results using article formatting functions
-        # Pass the total before max_records limit for proper summary
+        # Pass the total before max_filtered_result_count limit for proper summary
         total_before_limit = len(articles)
         try:
             formatted_content = _format_article_list(
@@ -734,7 +734,7 @@ def _format_article_list(
     Args:
         articles: List of article dictionaries
         include_ranking: Whether to include citation ranking information
-        total_found: Total number of articles found in search (before max_records limit)
+        total_found: Total number of articles found in search (before max_filtered_result_count limit)
 
     Returns:
         Formatted string representation of the article list
@@ -800,9 +800,8 @@ def _print_fetch_results(articles: list, n: int = 3) -> None:
 @tool
 def search_pmc_tool(
     query: str,
-    max_results: int = 100,
-    max_records: int = 10,
-    rerank: str = "referenced_by",
+    max_search_result_count: int = 100,
+    max_filtered_result_count: int = 10,
 ) -> dict:
     """Search PubMed Central (PMC) for scientific articles with citation analysis and ranking.
 
@@ -819,12 +818,11 @@ def search_pmc_tool(
             - Author search: Last name with initials, e.g., "Smith J[au]"
             - Journal search: Full title, abbreviation, or ISSN
             - Date filters (see examples below for date search syntax)
-        max_results: Maximum articles to fetch from initial search (1-1000, default: 100).
+        max_search_result_count: Maximum articles to fetch from initial search (1-1000, default: 100).
             Higher values provide more comprehensive results but take longer.
-        max_records: Maximum articles to return in final results (1-100, default: 10).
+        max_filtered_result_count: Maximum articles to return in final results (1-100, default: 10).
             Controls the size of the returned result set.
-        rerank: Ranking method to apply. Use "referenced_by" to rank by citation count
-            within the result set, or empty string for relevance-based ranking.
+
 
     Date Search Syntax:
         - Single date: "2020/06/01[dp]" (month and day optional: "2020[dp]")
@@ -846,7 +844,7 @@ def search_pmc_tool(
             search_pmc_tool("machine learning in healthcare")
 
         Search with recent date filter:
-            search_pmc_tool("mRNA vaccine COVID-19 AND last 2 years[dp]", max_results=200)
+            search_pmc_tool("mRNA vaccine COVID-19 AND last 2 years[dp]", max_search_result_count=200)
 
         Search with specific date range:
             search_pmc_tool("CRISPR gene editing AND 2020:2023[dp]")
@@ -857,12 +855,9 @@ def search_pmc_tool(
         Search by journal and recent articles:
             search_pmc_tool("Nature[journal] AND last 6 months[dp]")
 
-        Without citation ranking:
-            search_pmc_tool("quantum computing", rerank="")
     """
     return search_pmc(
         query=query,
-        max_results=max_results,
-        max_records=max_records,
-        rerank=rerank,
+        max_search_result_count=max_search_result_count,
+        max_filtered_result_count=max_filtered_result_count,
     )

@@ -1,28 +1,27 @@
 import asyncio
+
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from search_pmc import search_pmc_tool
 from strands import Agent, tool
 from strands.models import BedrockModel
-from strands_tools import calculator  # Import the calculator tool
-import datetime
+from variables import MODEL_ID, SYSTEM_PROMPT
+
+
+def debugger_callback_handler(**kwargs):
+    # Print the values in kwargs so that we can see everything
+    print(kwargs)
+
 
 app = BedrockAgentCoreApp()
 
-
-# Create a custom tool
-@tool
-def weather():
-    """Get weather"""  # Dummy implementation
-    return "sunny"
-
-
-model_id = "us.anthropic.claude-sonnet-4-20250514-v1:0"
 model = BedrockModel(
-    model_id=model_id,
+    model_id=MODEL_ID,
 )
 agent = Agent(
     model=model,
-    tools=[calculator, weather],
-    system_prompt="You're a helpful assistant. You can do simple math calculation, and tell the weather.",
+    tools=[search_pmc_tool],
+    system_prompt=SYSTEM_PROMPT,
+    callback_handler=debugger_callback_handler,
 )
 
 
@@ -35,15 +34,17 @@ async def strands_agent_bedrock(payload):
     print("User input:", user_input)
     try:
         async for event in agent.stream_async(user_input):
+
             # Print tool use
             for content in event.get("message", {}).get("content", []):
                 if tool_use := content.get("toolUse"):
                     yield "\n"
                     yield f"🔧 Using tool: {tool_use['name']}"
                     for k, v in tool_use["input"].items():
-                        yield f"**{k}**: {v}"
+                        yield f"**{k}**: {v}\n"
                     yield "\n"
 
+            # Print event data
             if "data" in event:
                 yield event["data"]
     except Exception as e:
