@@ -6,9 +6,9 @@ Learn how to build and deploy AI agents for life science research. AI research a
 
 ## Getting Started
 
-### Installation (One Command!)
+### Installation
 
-After cloning this repository in JupyterLab, open a terminal and run:
+After cloning this repository, open a terminal and run:
 
 ```bash
 cd sample-best-practices-for-life-science-research-agents
