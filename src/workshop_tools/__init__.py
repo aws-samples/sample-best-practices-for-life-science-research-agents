@@ -1,4 +1,4 @@
-"""AgentCore Chat package for AWS Bedrock AgentCore integration."""
+"""Workshop tools package for AWS Bedrock AgentCore integration."""
 
 from .agent_runtime_service import (
     AgentRuntime,

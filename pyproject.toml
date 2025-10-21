@@ -16,3 +16,10 @@ dependencies = [
   "strands-agents",
   "strands-agents-tools",
 ]
+
+[project.scripts]
+agentcore-chat = "workshop_tools.chat:chat"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
