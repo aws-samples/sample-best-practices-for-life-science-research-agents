@@ -1,0 +1,6 @@
+boto3 
+defusedxml 
+httpx
+strands-agents
+bedrock_agentcore
+paper-qa

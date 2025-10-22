@@ -2,6 +2,7 @@ import asyncio
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from search_pmc import search_pmc_tool
+from gather_evidence import gather_evidence_tool
 from strands import Agent
 from strands.models import BedrockModel
 from config import MODEL_ID, SYSTEM_PROMPT
@@ -13,7 +14,7 @@ model = BedrockModel(
 )
 agent = Agent(
     model=model,
-    tools=[search_pmc_tool],
+    tools=[search_pmc_tool, gather_evidence_tool],
     system_prompt=SYSTEM_PROMPT,
 )
 

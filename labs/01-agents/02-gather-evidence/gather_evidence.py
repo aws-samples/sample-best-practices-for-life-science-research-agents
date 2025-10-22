@@ -12,15 +12,15 @@ from paperqa.settings import (
     AgentSettings,
     IndexSettings,
     ParsingSettings,
-    AnswerSettings,
 )
 from strands import tool
+
 
 # Configure logging - suppress Rich logging errors from PaperQA
 def _configure_paperqa_logging():
     """
     Configure logging to suppress Rich handler errors from PaperQA.
-    
+
     PaperQA uses Rich logging handlers that fail in Jupyter notebook contexts
     when called from background threads, causing LookupError for parent_header.
     This function replaces Rich handlers with standard StreamHandlers.
@@ -35,7 +35,7 @@ def _configure_paperqa_logging():
         "aviary",
         "aviary.env",
     ]
-    
+
     for logger_name in paperqa_loggers:
         pqa_logger = logging.getLogger(logger_name)
         # Remove all handlers (including Rich handlers)
@@ -44,6 +44,7 @@ def _configure_paperqa_logging():
         pqa_logger.setLevel(logging.WARNING)
         # Prevent propagation to avoid parent loggers with Rich handlers
         pqa_logger.propagate = False
+
 
 logger = logging.getLogger("gather_evidence_tool")
 logger.level = logging.INFO
@@ -232,7 +233,7 @@ def gather_evidence_tool(
     logger.info(
         f"Starting gather_evidence_tool for PMCID: {pmcid}, question: {question}"
     )
-    
+
     # Configure PaperQA logging to avoid Rich handler errors in Jupyter
     _configure_paperqa_logging()
 
@@ -321,7 +322,6 @@ def gather_evidence_tool(
             ),
             embedding=PAPERQA_EMBEDDING,
             parsing=ParsingSettings(use_doc_details=False),
-            # answer=AnswerSettings(evidence_k=3),
         )
 
         # Ask the question
@@ -337,6 +337,10 @@ def gather_evidence_tool(
 
         logger.info(f"Successfully answered question for {pmcid}")
         logger.debug(f"Answer: {answer_text[:200]}...")
+
+        # Delete paper to avoid influencing future searches
+        logger.debug(f"Deleting paper {local_file_path}")
+        os.remove(local_file_path)
 
         return {
             "status": "success",
