@@ -12,6 +12,7 @@ from paperqa.settings import (
     AgentSettings,
     IndexSettings,
     ParsingSettings,
+    AnswerSettings,
 )
 from strands import tool
 
@@ -60,6 +61,9 @@ PAPERQA_AGENT_LLM = os.getenv(
 PAPERQA_EMBEDDING = os.getenv(
     "PAPERQA_EMBEDDING", "bedrock/amazon.titan-embed-text-v2:0"
 )
+PAPERQA_AGENT_TYPE = os.getenv("PAPERQA_AGENT_TYPE", "fake")
+PAPERQA_EVIDENCE_K = os.getenv("EVIDENCE_K", 5)
+PAPERQA_EVIDENCE_SUMMARY_LENGTH = os.getenv("EVIDENCE_SUMMARY_LENGTH", "25 to 50 words")
 
 
 class PMCError(Exception):
@@ -319,9 +323,15 @@ def gather_evidence_tool(
             agent=AgentSettings(
                 agent_llm=PAPERQA_AGENT_LLM,
                 index=IndexSettings(paper_directory=paper_directory),
+                agent_type=PAPERQA_AGENT_TYPE,
             ),
             embedding=PAPERQA_EMBEDDING,
             parsing=ParsingSettings(use_doc_details=False),
+            answer=AnswerSettings(
+                answer_max_sources=1,
+                evidence_k=PAPERQA_EVIDENCE_K,
+                evidence_summary_length=PAPERQA_EVIDENCE_SUMMARY_LENGTH,
+            ),
         )
 
         # Ask the question

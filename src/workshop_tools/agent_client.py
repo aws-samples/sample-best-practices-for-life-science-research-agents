@@ -48,7 +48,7 @@ class AgentClient:
         self.qualifier = qualifier
         self.client = boto3.client(
             "bedrock-agentcore",
-            config=botocore.config.Config(read_timeout=600, connect_timeout=5),
+            config=botocore.config.Config(read_timeout=900, connect_timeout=5),
         )
         self.session_id = None
 
