@@ -1,5 +1,5 @@
 
-MODEL_ID = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID = "global.anthropic.claude-sonnet-4-20250514-v1:0"
 
 SYSTEM_PROMPT = """You are a life science research assistant. When given a scientific question, follow this process:
 
