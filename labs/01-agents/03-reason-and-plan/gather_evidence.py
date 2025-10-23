@@ -354,6 +354,8 @@ def gather_evidence_tool(
             {"source": context.text.name, "context": context.context}
             for context in answer.session.contexts
         ]
+        # Grab first citation entry
+        citation = answer.session.contexts[0].text.doc.formatted_citation
 
         logger.info(f"Successfully answered question for {pmcid}")
         logger.debug(f"Answer: {answer_text[:200]}...")
@@ -370,6 +372,7 @@ def gather_evidence_tool(
                     "json": {
                         "question": answer.session.question,
                         "pmcid": pmcid,
+                        "citation": citation,
                         "evidence": contexts,
                         "source": source
                         or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
