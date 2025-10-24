@@ -12,7 +12,7 @@ from defusedxml import ElementTree as ET
 from strands import tool
 
 # Global configuration for commercial use filtering
-COMMERCIAL_USE_ONLY = False
+COMMERCIAL_USE_ONLY = True
 
 # Global configuration to rerank results by number by incoming references
 REFERENCED_BY_RERANK = True
