@@ -17,7 +17,7 @@ from paperqa.settings import (
 from strands import tool
 
 # Global configuration for commercial use filtering
-COMMERCIAL_USE_ONLY = False
+COMMERCIAL_USE_ONLY = True
 
 
 # Configure logging - suppress Rich logging errors from PaperQA
