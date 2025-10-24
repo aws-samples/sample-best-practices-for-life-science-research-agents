@@ -14,10 +14,15 @@ from paperqa.settings import (
     ParsingSettings,
     AnswerSettings,
 )
-from strands import tool
+from strands import tool, ToolContext
 
 # Global configuration for commercial use filtering
-COMMERCIAL_USE_ONLY = False
+COMMERCIAL_USE_ONLY = True
+
+EVIDENCE_TABLE_NAME = os.getenv("EVIDENCE_TABLE_NAME", "deep-research-evidence")
+
+# Initialize DynamoDB resource
+dynamodb = boto3.resource("dynamodb")
 
 
 # Configure logging - suppress Rich logging errors from PaperQA
@@ -219,9 +224,71 @@ def _download_from_s3(bucket: str, key: str, local_folder: str = "my_papers") ->
         raise PMCS3Error(f"Failed to download from S3: {str(e)}")
 
 
-@tool
+def _save_to_db(
+    tool_use_id: str,
+    pmcid: str,
+    citation: str,
+    question: str,
+    answer: str,
+    evidence: list,
+) -> dict:
+    """Save gathered evidence to DynamoDb table
+
+    Args:
+        tool_use_id: Unique identifier for the tool use
+        pmcid: PMC identifier
+        citation: Formatted citation
+        question: Question asked
+        answer: Answer text
+        evidence: List of evidence contexts
+
+    Returns:
+        dict: DynamoDB response
+
+    Raises:
+        ValueError: If table doesn't exist
+        ClientError: If DynamoDB operation fails
+    """
+    logger.info(f"Saving record to {EVIDENCE_TABLE_NAME}")
+
+    record = {
+        "toolUseId": tool_use_id,
+        "pmcid": pmcid,
+        "citation": citation,
+        "question": question,
+        "answer": answer,
+        "evidence": evidence,
+    }
+    logger.info(record)
+
+    try:
+        # Verify table exists
+        table = dynamodb.Table(EVIDENCE_TABLE_NAME)
+        table.load()  # This will raise an exception if table doesn't exist
+
+        # Put record
+        response = table.put_item(Item=record)
+        logger.debug(response)
+        logger.info(f"Successfully saved record with toolUseId: {tool_use_id}")
+
+        return response
+
+    except dynamodb.meta.client.exceptions.ResourceNotFoundException:
+        error_msg = f"DynamoDB table '{EVIDENCE_TABLE_NAME}' does not exist"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "Unknown")
+        error_message = e.response.get("Error", {}).get("Message", str(e))
+        logger.error(f"DynamoDB error ({error_code}): {error_message}")
+        raise
+
+
+@tool(context=True)
 def gather_evidence_tool(
-    pmcid: str, question: str, source: Optional[str] = None
+    pmcid: str,
+    question: str,
+    tool_context: ToolContext = None,
 ) -> dict:
     """
     Answer questions about a PMC article using paper-qa for intelligent retrieval.
@@ -232,13 +299,17 @@ def gather_evidence_tool(
     Args:
         pmcid: PMC identifier (e.g., "PMC6033041")
         question: The question to answer about the paper
-        source: Optional DOI URL for citation purposes
 
     Returns:
         dict: ToolResult with status and content containing the answer and citations
     """
+
+    tool_use_id = None
+    if tool_context and hasattr(tool_context, "tool_use") and tool_context.tool_use:
+        tool_use_id = tool_context.tool_use.get("toolUseId")
+
     logger.info(
-        f"Starting gather_evidence_tool for PMCID: {pmcid}, question: {question}"
+        f"Starting gather_evidence_tool for PMCID: {pmcid}, question: {question}, tool use id: {tool_use_id}"
     )
 
     # Configure PaperQA logging to avoid Rich handler errors in Jupyter
@@ -257,8 +328,7 @@ def gather_evidence_tool(
                         "json": {
                             "question": question,
                             "pmcid": pmcid,
-                            "source": source
-                            or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                            "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                         }
                     },
                 ],
@@ -310,8 +380,7 @@ def gather_evidence_tool(
                                 "json": {
                                     "question": question,
                                     "pmcid": pmcid,
-                                    "source": source
-                                    or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                                    "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                                 }
                             },
                         ],
@@ -364,6 +433,23 @@ def gather_evidence_tool(
         logger.debug(f"Deleting paper {local_file_path}")
         os.remove(local_file_path)
 
+        # Save evidence record to DynamoDB
+        if not tool_use_id:
+            logger.warning("No toolUseId found in tool_context, skipping DynamoDB save")
+        else:
+            try:
+                db_response = _save_to_db(
+                    tool_use_id,
+                    pmcid,
+                    citation,
+                    answer.session.question,
+                    answer_text,
+                    [context.get("context") for context in contexts],
+                )
+            except Exception as db_error:
+                logger.error(f"Failed to save to DynamoDB: {str(db_error)}")
+                # Continue execution - don't fail the tool if DB save fails
+
         return {
             "status": "success",
             "content": [
@@ -374,8 +460,7 @@ def gather_evidence_tool(
                         "pmcid": pmcid,
                         "citation": citation,
                         "evidence": contexts,
-                        "source": source
-                        or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                        "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                     }
                 },
             ],
@@ -391,8 +476,7 @@ def gather_evidence_tool(
                     "json": {
                         "question": question,
                         "pmcid": pmcid,
-                        "source": source
-                        or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                        "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                     }
                 },
             ],
@@ -409,8 +493,7 @@ def gather_evidence_tool(
                     "json": {
                         "question": question,
                         "pmcid": pmcid,
-                        "source": source
-                        or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                        "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                     }
                 },
             ],
@@ -429,8 +512,7 @@ def gather_evidence_tool(
                     "json": {
                         "question": question,
                         "pmcid": pmcid,
-                        "source": source
-                        or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                        "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                     }
                 },
             ],
