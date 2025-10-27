@@ -225,7 +225,7 @@ def gather_evidence(pmcid: str, question: str, source: Optional[str] = None) -> 
     Answer questions about a PMC article using paper-qa for intelligent retrieval.
 
     This function downloads a scientific paper from PubMed Central and uses the paper-qa
-    library to answer specific questions about the paper with citations.
+    library to answer specific questions about the paper with sources.
 
     Args:
         pmcid: PMC identifier (e.g., "PMC6033041")
@@ -233,7 +233,7 @@ def gather_evidence(pmcid: str, question: str, source: Optional[str] = None) -> 
         source: Optional DOI URL for citation purposes
 
     Returns:
-        dict: ToolResult with status and content containing the answer and citations
+        dict: ToolResult with status and content containing the answer and sources
     """
     logger.info(f"Starting gather_evidence for PMCID: {pmcid}, question: {question}")
 
@@ -359,7 +359,7 @@ def gather_evidence(pmcid: str, question: str, source: Optional[str] = None) -> 
             for context in answer.session.contexts
         ]
         # Grab first citation entry
-        citation = answer.session.contexts[0].text.doc.formatted_citation
+        # citation = answer.session.contexts[0].text.doc.formatted_citation
 
         # Generate unique evidence ID
         evidence_id = str(uuid.uuid4())
@@ -375,7 +375,6 @@ def gather_evidence(pmcid: str, question: str, source: Optional[str] = None) -> 
                     "json": {
                         "evidence_id": evidence_id,
                         "question": answer.session.question,
-                        "citation": citation,
                         "context": contexts,
                         "source": source
                         or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
@@ -446,14 +445,14 @@ def gather_evidence_tool(pmcid: str, question: str) -> dict:
     Answer questions about a PMC article using paper-qa for intelligent retrieval.
 
     This tool downloads a scientific paper from PubMed Central and uses the paper-qa
-    library to answer specific questions about the paper with citations.
+    library to answer specific questions about the paper with source.
 
     Args:
         pmcid: PMC identifier (e.g., "PMC6033041")
         question: The question to answer about the paper
 
     Returns:
-        dict: ToolResult with status and content containing the answer and citations
+        dict: ToolResult with status and content containing the answer and source
     """
     return gather_evidence(pmcid=pmcid, question=question)
 
