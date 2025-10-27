@@ -234,7 +234,7 @@ def _save_to_db(
     evidence_id: str,
     question: str,
     answer: str,
-    pmc_id: str,
+    source: str,
     context: list,
 ) -> dict:
     """Save gathered evidence record to DynamoDb table
@@ -243,7 +243,7 @@ def _save_to_db(
         evidence_id: Unique identifier for the evidence record
         question: Question asked
         answer: Answer text
-        pmc_id: Reference to source document
+        source: Reference to source document
         context: List of context summaries
 
     Returns:
@@ -259,7 +259,7 @@ def _save_to_db(
         "evidence_id": evidence_id,
         "question": question,
         "answer": answer,
-        "pmc_id": pmc_id,
+        "source": source,
         "context": context,
     }
     logger.info(record)
@@ -317,12 +317,7 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
                 "status": "error",
                 "content": [
                     {"text": error_msg},
-                    {
-                        "json": {
-                            "question": question,
-                            "pmc_id": pmc_id
-                        }
-                    },
+                    {"json": {"question": question, "source": pmc_id}},
                 ],
             }
 
@@ -333,7 +328,6 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
         local_text_folder = f"my_papers/{pmc_id}/txt"
         local_index_folder = f"my_papers/{pmc_id}/index"
 
-    
         # Step 2: Try to download from commercial bucket first
         local_file_path = None
         try:
@@ -375,12 +369,7 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
                         "status": "error",
                         "content": [
                             {"text": error_msg},
-                            {
-                                "json": {
-                                    "question": question,
-                                    "pmc_id": pmc_id
-                                }
-                            },
+                            {"json": {"question": question, "source": pmc_id}},
                         ],
                     }
                 else:
@@ -452,7 +441,7 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
                     "json": {
                         "evidence_id": evidence_id,
                         "question": answer.session.question,
-                        "pmc_id": pmc_id,
+                        "source": pmc_id,
                         "context": contexts,
                     }
                 },
@@ -465,12 +454,7 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
             "status": "error",
             "content": [
                 {"text": str(e)},
-                {
-                    "json": {
-                        "question": question,
-                        "pmc_id": pmc_id
-                    }
-                },
+                {"json": {"question": question, "source": pmc_id}},
             ],
         }
 
@@ -481,12 +465,7 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
             "status": "error",
             "content": [
                 {"text": error_msg},
-                {
-                    "json": {
-                        "question": question,
-                        "pmc_id": pmc_id
-                    }
-                },
+                {"json": {"question": question, "source": pmc_id}},
             ],
         }
 
@@ -499,12 +478,7 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
             "status": "error",
             "content": [
                 {"text": error_msg},
-                {
-                    "json": {
-                        "question": question,
-                        "pmc_id": pmc_id
-                    }
-                },
+                {"json": {"question": question, "source": pmc_id}},
             ],
         }
 

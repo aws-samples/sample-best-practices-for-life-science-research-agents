@@ -1,20 +1,29 @@
 import asyncio
+import logging
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from search_pmc import search_pmc_tool
-from gather_evidence import gather_evidence_tool
-from strands import Agent
+from strands import Agent, tool
 from strands.models import BedrockModel
-from config import MODEL_ID, SYSTEM_PROMPT
+
+from gather_evidence_ddb import gather_evidence_tool
+from search_pmc import search_pmc_tool
+
+# Configure logging
+logging.basicConfig(
+    format="%(levelname)s | %(name)s | %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+logger = logging.getLogger("pmc_research_agent")
+logger.level = logging.INFO
 
 
 MODEL_ID = "global.anthropic.claude-sonnet-4-20250514-v1:0"
 
 SYSTEM_PROMPT = """You are a life science research assistant. When given a scientific question, follow this process:
 
-1. Use search_pmc_tool with max_search_result_count between 200 and 500 and max_filtered_result_count between 10 and 20 to find highly-cited papers. Search broadly first, then narrow down. Use temporal filters like "last 5 years"[dp] for recent work. 
-2. Identify the PMC ID value for the most relevant paper, then submit the ID and the query to the gather_evidence_tool to retrieve detailed evidence related to the question.
-3. Generate a concise answer to the question based on the most relevant evidence, along with PMC ID and URL citations
+1. Use search_pmc_tool to find highly-cited papers. Search broadly first, then narrow down. Use temporal filters like "last 2 years"[dp] for recent work.
+2. Identify the PMC IDs of the most relevant papers, then submit each ID and the query to the gather_evidence_tool.
+3. Generate a concise answer to the question based on the most relevant evidence, followed by a list of the associated `evidence_id` values.
 """
 
 
@@ -23,7 +32,7 @@ app = BedrockAgentCoreApp()
 model = BedrockModel(
     model_id=MODEL_ID,
 )
-agent = Agent(
+pmc_research_agent = Agent(
     model=model,
     tools=[search_pmc_tool, gather_evidence_tool],
     system_prompt=SYSTEM_PROMPT,
@@ -38,7 +47,7 @@ async def strands_agent_bedrock(payload):
     user_input = payload.get("prompt")
     print("User input:", user_input)
     try:
-        async for event in agent.stream_async(user_input):
+        async for event in pmc_research_agent.stream_async(user_input):
 
             # Print tool use
             for content in event.get("message", {}).get("content", []):
