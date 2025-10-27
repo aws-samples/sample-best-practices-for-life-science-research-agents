@@ -3,26 +3,41 @@
 import logging
 import os
 import re
+import uuid
 from typing import Optional
 
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from paperqa import Settings, ask
-from paperqa.settings import (
-    AgentSettings,
-    IndexSettings,
-    ParsingSettings,
-    AnswerSettings,
-)
-from strands import tool, ToolContext
+from paperqa.settings import (AgentSettings, AnswerSettings, IndexSettings,
+                              ParsingSettings)
+from strands import tool
 
 # Global configuration for commercial use filtering
-COMMERCIAL_USE_ONLY = True
+COMMERCIAL_USE_ONLY = os.getenv("COMMERCIAL_USE_ONLY", True)
 
-EVIDENCE_TABLE_NAME = os.getenv("EVIDENCE_TABLE_NAME", "deep-research-evidence")
+# Paper-QA Model Configuration
+PAPERQA_LLM = os.getenv("PAPERQA_LLM", "global.anthropic.claude-sonnet-4-20250514-v1:0")
+PAPERQA_SUMMARY_LLM = os.getenv(
+    "PAPERQA_SUMMARY_LLM", "bedrock/openai.gpt-oss-120b-1:0"
+)
+PAPERQA_AGENT_LLM = os.getenv(
+    "PAPERQA_AGENT_LLM", "global.anthropic.claude-sonnet-4-20250514-v1:0"
+)
+PAPERQA_EMBEDDING = os.getenv(
+    "PAPERQA_EMBEDDING", "bedrock/amazon.titan-embed-text-v2:0"
+)
+PAPERQA_AGENT_TYPE = os.getenv("PAPERQA_AGENT_TYPE", "fake")
+PAPERQA_EVIDENCE_K = os.getenv("EVIDENCE_K", 5)
+PAPERQA_EVIDENCE_SUMMARY_LENGTH = os.getenv("EVIDENCE_SUMMARY_LENGTH", "25 to 50 words")
 
-# Initialize DynamoDB resource
-dynamodb = boto3.resource("dynamodb")
+# Configure logging
+logging.basicConfig(
+    format="%(levelname)s | %(name)s | %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+logger = logging.getLogger("gather_evidence")
+logger.level = logging.INFO
 
 
 # Configure logging - suppress Rich logging errors from PaperQA
@@ -53,25 +68,6 @@ def _configure_paperqa_logging():
         pqa_logger.setLevel(logging.WARNING)
         # Prevent propagation to avoid parent loggers with Rich handlers
         pqa_logger.propagate = False
-
-
-logger = logging.getLogger("gather_evidence_tool")
-logger.level = logging.INFO
-
-# Paper-QA Model Configuration
-PAPERQA_LLM = os.getenv("PAPERQA_LLM", "global.anthropic.claude-sonnet-4-20250514-v1:0")
-PAPERQA_SUMMARY_LLM = os.getenv(
-    "PAPERQA_SUMMARY_LLM", "bedrock/openai.gpt-oss-120b-1:0"
-)
-PAPERQA_AGENT_LLM = os.getenv(
-    "PAPERQA_AGENT_LLM", "global.anthropic.claude-sonnet-4-20250514-v1:0"
-)
-PAPERQA_EMBEDDING = os.getenv(
-    "PAPERQA_EMBEDDING", "bedrock/amazon.titan-embed-text-v2:0"
-)
-PAPERQA_AGENT_TYPE = os.getenv("PAPERQA_AGENT_TYPE", "fake")
-PAPERQA_EVIDENCE_K = os.getenv("EVIDENCE_K", 5)
-PAPERQA_EVIDENCE_SUMMARY_LENGTH = os.getenv("EVIDENCE_SUMMARY_LENGTH", "25 to 50 words")
 
 
 class PMCError(Exception):
@@ -224,93 +220,22 @@ def _download_from_s3(bucket: str, key: str, local_folder: str = "my_papers") ->
         raise PMCS3Error(f"Failed to download from S3: {str(e)}")
 
 
-def _save_to_db(
-    tool_use_id: str,
-    pmcid: str,
-    citation: str,
-    question: str,
-    answer: str,
-    evidence: list,
-) -> dict:
-    """Save gathered evidence to DynamoDb table
-
-    Args:
-        tool_use_id: Unique identifier for the tool use
-        pmcid: PMC identifier
-        citation: Formatted citation
-        question: Question asked
-        answer: Answer text
-        evidence: List of evidence contexts
-
-    Returns:
-        dict: DynamoDB response
-
-    Raises:
-        ValueError: If table doesn't exist
-        ClientError: If DynamoDB operation fails
-    """
-    logger.info(f"Saving record to {EVIDENCE_TABLE_NAME}")
-
-    record = {
-        "toolUseId": tool_use_id,
-        "pmcid": pmcid,
-        "citation": citation,
-        "question": question,
-        "answer": answer,
-        "evidence": evidence,
-    }
-    logger.info(record)
-
-    try:
-        # Verify table exists
-        table = dynamodb.Table(EVIDENCE_TABLE_NAME)
-        table.load()  # This will raise an exception if table doesn't exist
-
-        # Put record
-        response = table.put_item(Item=record)
-        logger.debug(response)
-        logger.info(f"Successfully saved record with toolUseId: {tool_use_id}")
-
-        return response
-
-    except dynamodb.meta.client.exceptions.ResourceNotFoundException:
-        error_msg = f"DynamoDB table '{EVIDENCE_TABLE_NAME}' does not exist"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-    except ClientError as e:
-        error_code = e.response.get("Error", {}).get("Code", "Unknown")
-        error_message = e.response.get("Error", {}).get("Message", str(e))
-        logger.error(f"DynamoDB error ({error_code}): {error_message}")
-        raise
-
-
-@tool(context=True)
-def gather_evidence_tool(
-    pmcid: str,
-    question: str,
-    tool_context: ToolContext = None,
-) -> dict:
+def gather_evidence(pmcid: str, question: str, source: Optional[str] = None) -> dict:
     """
     Answer questions about a PMC article using paper-qa for intelligent retrieval.
 
-    This tool downloads a scientific paper from PubMed Central and uses the paper-qa
+    This function downloads a scientific paper from PubMed Central and uses the paper-qa
     library to answer specific questions about the paper with citations.
 
     Args:
         pmcid: PMC identifier (e.g., "PMC6033041")
         question: The question to answer about the paper
+        source: Optional DOI URL for citation purposes
 
     Returns:
         dict: ToolResult with status and content containing the answer and citations
     """
-
-    tool_use_id = None
-    if tool_context and hasattr(tool_context, "tool_use") and tool_context.tool_use:
-        tool_use_id = tool_context.tool_use.get("toolUseId")
-
-    logger.info(
-        f"Starting gather_evidence_tool for PMCID: {pmcid}, question: {question}, tool use id: {tool_use_id}"
-    )
+    logger.info(f"Starting gather_evidence for PMCID: {pmcid}, question: {question}")
 
     # Configure PaperQA logging to avoid Rich handler errors in Jupyter
     _configure_paperqa_logging()
@@ -328,7 +253,8 @@ def gather_evidence_tool(
                         "json": {
                             "question": question,
                             "pmcid": pmcid,
-                            "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                            "source": source
+                            or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                         }
                     },
                 ],
@@ -338,12 +264,16 @@ def gather_evidence_tool(
         bucket = "pmc-oa-opendata"
         commercial_key = f"oa_comm/txt/all/{pmcid}.txt"
         noncommercial_key = f"oa_noncomm/txt/all/{pmcid}.txt"
+        local_text_folder = f"my_papers/{pmcid}/txt"
+        local_index_folder = f"my_papers/{pmcid}/index"
 
         # Step 2: Try to download from commercial bucket first
         local_file_path = None
         try:
             logger.debug(f"Checking commercial bucket for {pmcid}")
-            local_file_path = _download_from_s3(bucket, commercial_key)
+            local_file_path = _download_from_s3(
+                bucket, commercial_key, local_folder=local_text_folder
+            )
             logger.info(f"Successfully retrieved commercial article {pmcid}")
 
         except PMCS3Error as e:
@@ -363,7 +293,9 @@ def gather_evidence_tool(
             logger.info(f"Checking non-commercial bucket for {pmcid}")
 
             try:
-                local_file_path = _download_from_s3(bucket, noncommercial_key)
+                local_file_path = _download_from_s3(
+                    bucket, noncommercial_key, local_folder=local_text_folder
+                )
                 logger.warning(
                     f"Article {pmcid} found in non-commercial bucket - licensing restrictions may apply"
                 )
@@ -380,7 +312,8 @@ def gather_evidence_tool(
                                 "json": {
                                     "question": question,
                                     "pmcid": pmcid,
-                                    "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                                    "source": source
+                                    or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                                 }
                             },
                         ],
@@ -392,8 +325,7 @@ def gather_evidence_tool(
         logger.info(f"Processing paper with paper-qa for question: {question}")
 
         # Get the directory containing the downloaded file
-        paper_directory = os.path.dirname(local_file_path)
-        logger.debug(f"Using paper directory: {paper_directory}")
+        logger.debug(f"Using paper directory: {local_text_folder}")
 
         # Configure paper-qa settings
         settings = Settings(
@@ -401,7 +333,10 @@ def gather_evidence_tool(
             summary_llm=PAPERQA_SUMMARY_LLM,
             agent=AgentSettings(
                 agent_llm=PAPERQA_AGENT_LLM,
-                index=IndexSettings(paper_directory=paper_directory),
+                index=IndexSettings(
+                    index_directory=local_index_folder,
+                    paper_directory=local_text_folder,
+                ),
                 agent_type=PAPERQA_AGENT_TYPE,
             ),
             embedding=PAPERQA_EMBEDDING,
@@ -420,35 +355,17 @@ def gather_evidence_tool(
         # Format the response using Strands ToolResult format
         answer_text = answer.session.answer
         contexts = [
-            {"source": context.text.name, "context": context.context}
+            {"chunk": context.text.name, "summary": context.context}
             for context in answer.session.contexts
         ]
         # Grab first citation entry
         citation = answer.session.contexts[0].text.doc.formatted_citation
 
+        # Generate unique evidence ID
+        evidence_id = str(uuid.uuid4())
+
         logger.info(f"Successfully answered question for {pmcid}")
         logger.debug(f"Answer: {answer_text[:200]}...")
-
-        # Delete paper to avoid influencing future searches
-        logger.debug(f"Deleting paper {local_file_path}")
-        os.remove(local_file_path)
-
-        # Save evidence record to DynamoDB
-        if not tool_use_id:
-            logger.warning("No toolUseId found in tool_context, skipping DynamoDB save")
-        else:
-            try:
-                db_response = _save_to_db(
-                    tool_use_id,
-                    pmcid,
-                    citation,
-                    answer.session.question,
-                    answer_text,
-                    [context.get("context") for context in contexts],
-                )
-            except Exception as db_error:
-                logger.error(f"Failed to save to DynamoDB: {str(db_error)}")
-                # Continue execution - don't fail the tool if DB save fails
 
         return {
             "status": "success",
@@ -456,11 +373,12 @@ def gather_evidence_tool(
                 {"text": answer_text},
                 {
                     "json": {
+                        "evidence_id": evidence_id,
                         "question": answer.session.question,
-                        "pmcid": pmcid,
                         "citation": citation,
-                        "evidence": contexts,
-                        "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                        "context": contexts,
+                        "source": source
+                        or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                     }
                 },
             ],
@@ -476,7 +394,8 @@ def gather_evidence_tool(
                     "json": {
                         "question": question,
                         "pmcid": pmcid,
-                        "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                        "source": source
+                        or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                     }
                 },
             ],
@@ -493,7 +412,8 @@ def gather_evidence_tool(
                     "json": {
                         "question": question,
                         "pmcid": pmcid,
-                        "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                        "source": source
+                        or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                     }
                 },
             ],
@@ -512,16 +432,35 @@ def gather_evidence_tool(
                     "json": {
                         "question": question,
                         "pmcid": pmcid,
-                        "source": f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                        "source": source
+                        or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
                     }
                 },
             ],
         }
 
 
+@tool
+def gather_evidence_tool(pmcid: str, question: str) -> dict:
+    """
+    Answer questions about a PMC article using paper-qa for intelligent retrieval.
+
+    This tool downloads a scientific paper from PubMed Central and uses the paper-qa
+    library to answer specific questions about the paper with citations.
+
+    Args:
+        pmcid: PMC identifier (e.g., "PMC6033041")
+        question: The question to answer about the paper
+
+    Returns:
+        dict: ToolResult with status and content containing the answer and citations
+    """
+    return gather_evidence(pmcid=pmcid, question=question)
+
+
 if __name__ == "__main__":
     # Example usage for testing
-    result = gather_evidence_tool(
+    result = gather_evidence(
         "PMC9438179", "How safe and effective are GLP-1 drugs for long term use?"
     )
     print(result)
