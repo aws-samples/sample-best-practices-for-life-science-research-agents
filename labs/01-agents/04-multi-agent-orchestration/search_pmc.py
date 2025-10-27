@@ -3,28 +3,25 @@
 
 import logging
 import os
-from typing import Any, Dict, List
-from xml.etree.ElementTree import Element
 import re
+from typing import Any, Dict, List, Literal
+from xml.etree.ElementTree import Element
 
 import httpx
 from defusedxml import ElementTree as ET
 from strands import tool
 
 # Global configuration for commercial use filtering
-COMMERCIAL_USE_ONLY = True
-
-# Global configuration to rerank results by number by incoming references
-REFERENCED_BY_RERANK = True
+COMMERCIAL_USE_ONLY = os.getenv("COMMERCIAL_USE_ONLY", True)
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,  # Set the root logger level
     format="%(levelname)s | %(name)s | %(message)s",
     handlers=[logging.StreamHandler()],
 )
 
 logger = logging.getLogger("search_pmc")
+logger.setLevel(logging.INFO)
 
 # Type alias forbetter readibility
 ArticleDict = Dict[str, Any]
@@ -36,6 +33,7 @@ def search_pmc(
     query: str,
     max_search_result_count: int = 100,
     max_filtered_result_count: int = 10,
+    rerank_by: Literal["references", None] = "references",
 ) -> dict:
     """
     Search PMC for articles matching the query with ToolResult format.
@@ -117,7 +115,6 @@ def search_pmc(
         except Exception as query_error:
             logger.error(f"Error building search query: {query_error}")
             return {
-                # "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [
                     {"text": f"Error building search query: {str(query_error)}"}
@@ -141,7 +138,6 @@ def search_pmc(
         except httpx.HTTPStatusError as http_error:
             logger.error(f"HTTP error during PMC search: {http_error}")
             return {
-                # "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [
                     {
@@ -152,7 +148,6 @@ def search_pmc(
         except httpx.TimeoutException as timeout_error:
             logger.error(f"Timeout error during PMC search: {timeout_error}")
             return {
-                # "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [
                     {"text": f"Request timeout during PMC search: {str(timeout_error)}"}
@@ -161,7 +156,6 @@ def search_pmc(
         except httpx.NetworkError as network_error:
             logger.error(f"Network error during PMC search: {network_error}")
             return {
-                # "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [
                     {"text": f"Network error during PMC search: {str(network_error)}"}
@@ -170,7 +164,6 @@ def search_pmc(
         except httpx.RequestError as request_error:
             logger.error(f"Request error during PMC search: {request_error}")
             return {
-                # "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [
                     {"text": f"Request error during PMC search: {str(request_error)}"}
@@ -182,7 +175,6 @@ def search_pmc(
         except Exception as json_error:
             logger.error(f"JSON parsing error in search response: {json_error}")
             return {
-                # "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [
                     {"text": f"Error parsing search response: {str(json_error)}"}
@@ -196,7 +188,6 @@ def search_pmc(
         except KeyError as key_error:
             logger.error(f"Unexpected search response format: {key_error}")
             return {
-                # "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [
                     {
@@ -219,7 +210,6 @@ def search_pmc(
         except Exception as fetch_error:
             logger.error(f"Error fetching article details: {fetch_error}")
             return {
-                # "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [
                     {"text": f"Error fetching article details: {str(fetch_error)}"}
@@ -227,7 +217,7 @@ def search_pmc(
             }
 
         # Apply reranking if requested
-        if REFERENCED_BY_RERANK:
+        if rerank_by == "references":
             try:
                 logger.info("Calculating citation relationships and ranking articles")
                 enhanced_articles = _calculate_referenced_by_counts(articles)
@@ -257,7 +247,6 @@ def search_pmc(
                 except Exception as format_error:
                     logger.error(f"Error formatting article results: {format_error}")
                     return {
-                        # "toolUseId": tool_use_id,
                         "status": "error",
                         "content": [
                             {
@@ -267,7 +256,6 @@ def search_pmc(
                     }
 
                 return {
-                    # "toolUseId": tool_use_id,
                     "status": "success",
                     "content": [{"text": formatted_content}],
                 }
@@ -280,7 +268,7 @@ def search_pmc(
             logger.info("Skipping citation-based reranking")
             warning_message = None
 
-        # Return original results (either when REFERENCED_BY_RERANK=None or as fallback)
+        # Return original results (either when referenced_by=None or as fallback)
         if max_filtered_result_count is not None:
             final_results = articles[:max_filtered_result_count]
             logger.info(
@@ -306,7 +294,6 @@ def search_pmc(
         except Exception as format_error:
             logger.error(f"Error formatting article results: {format_error}")
             return {
-                # "toolUseId": tool_use_id,
                 "status": "error",
                 "content": [
                     {"text": f"Error formatting search results: {str(format_error)}"}
@@ -314,7 +301,6 @@ def search_pmc(
             }
 
         return {
-            # "toolUseId": tool_use_id,
             "status": "success",
             "content": [{"text": formatted_content}],
         }
@@ -322,7 +308,6 @@ def search_pmc(
     except Exception as unexpected_error:
         logger.error(f"Unexpected error in search_pmc: {unexpected_error}")
         return {
-            # "toolUseId": tool_use_id,
             "status": "error",
             "content": [
                 {"text": f"Unexpected error during PMC search: {str(unexpected_error)}"}
@@ -349,7 +334,7 @@ def fetch_pmc(pmc_ids: List[str]) -> List[ArticleDict]:
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
     fetch_url = f"{base_url}/efetch.fcgi"
 
-    fetch_params = {"db": "pmc", "id": ",".join(pmc_ids)}  # , "retmode": "xml"}
+    fetch_params = {"db": "pmc", "id": ",".join(pmc_ids)}
 
     try:
         try:
@@ -376,8 +361,6 @@ def fetch_pmc(pmc_ids: List[str]) -> List[ArticleDict]:
 
         # Parse XML response
         try:
-            # with open("output.xml", "w") as f:
-            # f.write(fetch_response.text)
             root = ET.fromstring(fetch_response.text)
         except ET.ParseError as xml_error:
             logger.error(f"XML parsing error in fetch response: {xml_error}")
@@ -800,10 +783,9 @@ def _print_fetch_results(articles: list, n: int = 3) -> None:
 @tool
 def search_pmc_tool(
     query: str,
-    max_search_result_count: int = 100,
-    max_filtered_result_count: int = 10,
+    rerank_by: Literal["references", None] = "references",
 ) -> dict:
-    """Search PubMed Central (PMC) for scientific articles with citation analysis and ranking.
+    """Search PubMed Central (PMC) for scientific articles with citation analysis and reranking.
 
     This tool performs comprehensive literature searches across PMC with optional citation
     analysis. Results can be ranked by how frequently they are cited within the result set,
@@ -818,11 +800,9 @@ def search_pmc_tool(
             - Author search: Last name with initials, e.g., "Smith J[au]"
             - Journal search: Full title, abbreviation, or ISSN
             - Date filters (see examples below for date search syntax)
-        max_search_result_count: Maximum articles to fetch from initial search (1-1000, default: 100).
-            Higher values provide more comprehensive results but take longer.
-        max_filtered_result_count: Maximum articles to return in final results (1-100, default: 10).
-            Controls the size of the returned result set.
-
+        rerank_by: Reranking method for search results. Options are:
+            - (default) "references": Rerank results in decreasing order of incoming references. Use to identify the most influenctial articles.
+            - None. Returns articles in the same order as the PMC search API. Use to identify newer articles or those tha capture a wider range of perspective.
 
     Date Search Syntax:
         - Single date: "2020/06/01[dp]" (month and day optional: "2020[dp]")
@@ -844,7 +824,7 @@ def search_pmc_tool(
             search_pmc_tool("machine learning in healthcare")
 
         Search with recent date filter:
-            search_pmc_tool("mRNA vaccine COVID-19 AND last 2 years[dp]", max_search_result_count=200)
+            search_pmc_tool("mRNA vaccine COVID-19 AND last 2 years[dp]", rerank_by=None)
 
         Search with specific date range:
             search_pmc_tool("CRISPR gene editing AND 2020:2023[dp]")
@@ -853,11 +833,7 @@ def search_pmc_tool(
             search_pmc_tool("Smith J[au] AND cancer AND 2022/01/01:2024/12/31[dp]")
 
         Search by journal and recent articles:
-            search_pmc_tool("Nature[journal] AND last 6 months[dp]")
+            search_pmc_tool("Nature[journal] AND last 6 months[dp]", rerank_by=None)
 
     """
-    return search_pmc(
-        query=query,
-        max_search_result_count=max_search_result_count,
-        max_filtered_result_count=max_filtered_result_count,
-    )
+    return search_pmc(query=query, rerank_by=rerank_by)
