@@ -5,6 +5,9 @@ import logging
 import os
 import re
 from typing import Any, Dict, List, Literal
+
+# Element only used for type check
+# nosemgrep: use-defused-xml
 from xml.etree.ElementTree import Element
 
 import httpx

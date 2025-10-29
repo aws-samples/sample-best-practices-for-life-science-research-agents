@@ -5,6 +5,9 @@ import logging
 import os
 import re
 from typing import Any, Dict, List, Literal
+
+# Element only used for type check
+# nosemgrep: use-defused-xml
 from xml.etree.ElementTree import Element
 
 import httpx
@@ -373,6 +376,7 @@ def fetch_pmc(pmc_ids: List[str]) -> List[ArticleDict]:
 
         for article_element in root.findall(".//article"):
             try:
+                print(type(article_element))
                 article = _extract_article_data(article_element)
                 if article:  # Only add non-empty articles
                     articles.append(article)
@@ -837,3 +841,7 @@ def search_pmc_tool(
 
     """
     return search_pmc(query=query, rerank_by=rerank_by)
+
+if __name__ == "__main__":
+    print("foo")
+    search_pmc(query="Recent advancements in antibody drug conjugates")
