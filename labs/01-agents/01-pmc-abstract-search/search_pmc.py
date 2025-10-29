@@ -346,49 +346,48 @@ def fetch_pmc(pmc_ids: List[str]) -> List[ArticleDict]:
             )
             fetch_response.raise_for_status()
         except httpx.HTTPStatusError as http_error:
-            logger.error(f"HTTP error during article fetch: {http_error}")
+            logger.warning(f"HTTP error during article fetch: {http_error}")
             raise Exception(
                 f"HTTP error during article fetch: {http_error.response.status_code} - {str(http_error)}"
             )
         except httpx.TimeoutException as timeout_error:
-            logger.error(f"Timeout error during article fetch: {timeout_error}")
+            logger.warning(f"Timeout error during article fetch: {timeout_error}")
             raise Exception(
                 f"Request timeout during article fetch: {str(timeout_error)}"
             )
         except httpx.NetworkError as network_error:
-            logger.error(f"Network error during article fetch: {network_error}")
+            logger.warning(f"Network error during article fetch: {network_error}")
             raise Exception(f"Network error during article fetch: {str(network_error)}")
         except httpx.RequestError as request_error:
-            logger.error(f"Request error during article fetch: {request_error}")
+            logger.warning(f"Request error during article fetch: {request_error}")
             raise Exception(f"Request error during article fetch: {str(request_error)}")
 
         # Parse XML response
         try:
             root = ET.fromstring(fetch_response.text)
         except ET.ParseError as xml_error:
-            logger.error(f"XML parsing error in fetch response: {xml_error}")
+            logger.warning(f"XML parsing error in fetch response: {xml_error}")
             raise Exception(f"Error parsing XML response from PM: {str(xml_error)}")
         except Exception as parse_error:
-            logger.error(f"Unexpected parsing error in fetch response: {parse_error}")
+            logger.warning(f"Unexpected parsing error in fetch response: {parse_error}")
             raise Exception(f"Error parsing response from PM: {str(parse_error)}")
 
         articles = []
 
         for article_element in root.findall(".//article"):
             try:
-                print(type(article_element))
                 article = _extract_article_data(article_element)
                 if article:  # Only add non-empty articles
                     articles.append(article)
             except Exception as e:
-                logger.error(f"Error parsing individual article: {e}")
+                logger.warning(f"Error parsing individual article: {e}")
                 continue
 
         logger.info(f"Successfully fetched {len(articles)} articles")
         return articles
 
     except Exception as e:
-        logger.error(f"Error fetching article details: {e}")
+        logger.warning(f"Error fetching article details: {e}")
         # Re-raise the exception so search_pmc can handle it properly
         raise
 
@@ -841,7 +840,3 @@ def search_pmc_tool(
 
     """
     return search_pmc(query=query, rerank_by=rerank_by)
-
-if __name__ == "__main__":
-    print("foo")
-    search_pmc(query="Recent advancements in antibody drug conjugates")
