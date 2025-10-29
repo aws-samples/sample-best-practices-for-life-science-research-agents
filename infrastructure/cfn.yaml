@@ -1,0 +1,1000 @@
+Parameters:
+  UserProfileName:
+    Type: String
+    Description: The user profile name for the SageMaker workshop
+    Default: "SageMakerUser"
+  DomainName:
+    Type: String
+    Description: The domain name of the Sagemaker studio instance
+    Default: "MyDomain"
+  CodeRepository:
+    Type: String
+    Description: The URL of a code repository to suggest in the Studio Git window
+    Default: "https://github.com/aws-samples/aws-healthcare-lifescience-ai-ml-sample-notebooks.git"
+  DynamoDbTableName:
+    Type: String
+    Description: Table name for the DynamoDb instance used to store evidence
+    Default: "deep-research-evidence"
+
+Resources:
+  #########################################################
+  # DynamoDB
+  #########################################################
+
+  ResearchEvidenceTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Ref DynamoDbTableName
+      AttributeDefinitions:
+        - AttributeName: evidence_id
+          AttributeType: S
+        - AttributeName: source
+          AttributeType: S
+      KeySchema:
+        - AttributeName: evidence_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: source_index
+          KeySchema:
+            - AttributeName: source
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  DynamoDBTableNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/table-name
+      Description: DynamoDB table name for deep research workshop
+      Type: String
+      Value: !Ref ResearchEvidenceTable
+
+  #########################################################
+  # AgentCore
+  #########################################################
+
+  AgentCoreRuntimeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub
+        - "AmazonBedrockAgentCore-${AWS::Region}-${StackIdSuffix}"
+        - StackIdSuffix:
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]],
+            ]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*"
+      Policies:
+        - PolicyName: StandardAgentCoreRuntimeExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ECRImageAccess
+                Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/*"
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogStreams
+                  - logs:CreateLogGroup
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*"
+              - Sid: ECRTokenAccess
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource:
+                  - "*"
+              - Effect: Allow
+                Resource: "*"
+                Action: cloudwatch:PutMetricData
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: bedrock-agentcore
+              - Sid: GetAgentAccessToken
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:GetWorkloadAccessToken
+                  - bedrock-agentcore:GetWorkloadAccessTokenForJWT
+                  - bedrock-agentcore:GetWorkloadAccessTokenForUserId
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default"
+                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/*"
+              - Sid: BedrockModelInvocation
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
+                  - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:*"
+              - Sid: MarketplaceOperationsFromBedrockFor3pModels
+                Effect: Allow
+                Action:
+                  - "aws-marketplace:Subscribe"
+                  - "aws-marketplace:ViewSubscriptions"
+                  - "aws-marketplace:Unsubscribe"
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:CalledViaLast: "bedrock.amazonaws.com"
+        - PolicyName: DynamoDb
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: DynamoDb
+                Effect: Allow
+                Action:
+                  - dynamodb:CreateTable
+                  - dynamodb:DescribeTable
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ResearchEvidenceTable.Arn
+                  - !Sub "${ResearchEvidenceTable.Arn}/*"
+
+  AgentCoreRuntimeRoleArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/agentcore-runtime-role-arn
+      Description: ARN for AgentCore Runtime role
+      Type: String
+      Value: !GetAtt AgentCoreRuntimeRole.Arn
+
+  #########################################################
+  # SageMaker
+  #########################################################
+
+  StudioBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LoggingConfiguration:
+        LogFilePrefix: s3-logs
+      BucketName: !Join
+        - "-"
+        - - "sagemaker-studio"
+          - !Select
+            - 0
+            - !Split
+              - "-"
+              - !Select
+                - 2
+                - !Split
+                  - "/"
+                  - !Ref "AWS::StackId"
+
+  S3BucketNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/s3-bucket-name
+      Description: Amazon S3 bucket name for deep research workshop
+      Type: String
+      Value: !Ref StudioBucket
+
+  S3BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref StudioBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource:
+              - !Sub ${StudioBucket.Arn}/*
+            Principal:
+              AWS: !Ref AWS::AccountId
+          - Action:
+              - s3:GetBucketAcl
+              - s3:GetBucketLocation
+              - s3:PutBucketPolicy
+            Effect: Allow
+            Resource:
+              - !GetAtt StudioBucket.Arn
+            Principal:
+              AWS: !Ref AWS::AccountId
+
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AssumeOtherServiceRoles
+            Effect: Allow
+            Principal:
+              Service:
+                - sagemaker.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: sagemaker-standard
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: Glue
+                Effect: Allow
+                Action:
+                  - glue:GetConnections
+                Resource: "*"
+              - Sid: Logs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:DescribeResourcePolicies
+                Resource: "*"
+              - Sid: SageMaker
+                Effect: Allow
+                Action:
+                  - sagemaker:AddTags
+                  - sagemaker:CreateApp
+                  - sagemaker:CreatePresignedDomainUrl
+                  - sagemaker:CreateSpace
+                  - sagemaker:DeleteApp
+                  - sagemaker:DeleteSpace
+                  - sagemaker:DescribeApp
+                  - sagemaker:DescribeDomain
+                  - sagemaker:DescribeSpace
+                  - sagemaker:DescribeUserProfile
+                  - sagemaker:ListApps
+                  - sagemaker:ListPartnerApps
+                  - sagemaker:ListSpaces
+                  - sagemaker:ListTags
+                  - sagemaker:UpdateSpace
+                Resource: "*"
+              - Sid: S3
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${StudioBucket}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${StudioBucket}/*"
+              - Sid: AllowGetIAMInfo
+                Effect: Allow
+                Action:
+                  - iam:GetRole
+                  - iam:GetRolePolicy
+                  - iam:ListRoleTags
+                Resource:
+                  - "arn:aws:iam::*:role/*SageMakerExecutionRole*"
+              - Sid: MarketplaceOperationsFromBedrockFor3pModels
+                Effect: Allow
+                Action:
+                  - "aws-marketplace:Subscribe"
+                  - "aws-marketplace:ViewSubscriptions"
+                  - "aws-marketplace:Unsubscribe"
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:CalledViaLast: "bedrock.amazonaws.com"
+        - PolicyName: AgentCoreStarterToolkit
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: IAMRoleManagement
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:TagRole
+                  - iam:ListRolePolicies
+                  - iam:ListAttachedRolePolicies
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*BedrockAgentCore*"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/service-role/*BedrockAgentCore*"
+              - Sid: IAMNetworkServiceLinkedRoleCreation
+                Effect: Allow
+                Action:
+                  - iam:CreateServiceLinkedRole
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::*:role/aws-service-role/network.bedrock-agentcore.amazonaws.com/AWSServiceRoleForBedrockAgentCoreNetwork"
+                Condition:
+                  StringLike:
+                    iam:AWSServiceName: "network.bedrock-agentcore.amazonaws.com"
+              - Sid: IAMIdentityServiceLinkedRoleCreation
+                Effect: Allow
+                Action:
+                  - iam:CreateServiceLinkedRole
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::*:role/aws-service-role/runtime-identity.bedrock-agentcore.amazonaws.com/AWSServiceRoleForBedrockAgentCoreRuntimeIdentity"
+                Condition:
+                  StringLike:
+                    iam:AWSServiceName: "runtime-identity.bedrock-agentcore.amazonaws.com"
+              - Sid: CodeBuildProjectAccess
+                Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                  - codebuild:ListBuildsForProject
+                  - codebuild:CreateProject
+                  - codebuild:UpdateProject
+                  - codebuild:BatchGetProjects
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:codebuild:*:*:project/bedrock-agentcore-*"
+                  - !Sub "arn:${AWS::Partition}:codebuild:*:*:project/bedrock-agentcore-*"
+              - Sid: CodeBuildListAccess
+                Effect: Allow
+                Action:
+                  - codebuild:ListProjects
+                Resource: "*"
+              - Sid: BedrockAgentCore
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:CreateAgentRuntime
+                  - bedrock-agentcore:CreateAgentRuntimeEndpoint
+                  - bedrock-agentcore:CreateWorkloadIdentity
+                  - bedrock-agentcore:DeleteAgentRuntime
+                  - bedrock-agentcore:DeleteAgentRuntimeEndpoint
+                  - bedrock-agentcore:DeleteWorkloadIdentity
+                  - bedrock-agentcore:GetAgentRuntime
+                  - bedrock-agentcore:GetAgentRuntimeEndpoint
+                  - bedrock-agentcore:GetWorkloadIdentity
+                  - bedrock-agentcore:ListAgentRuntimes
+                  - bedrock-agentcore:UpdateAgentRuntime
+                  - bedrock-agentcore:UpdateAgentRuntimeEndpoint
+                  - bedrock-agentcore:UpdateWorkloadIdentity
+                  - bedrock-agentcore:InvokeAgentRuntime
+                Resource: "*"
+              - Sid: IAMPassRoleAccess
+                Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::*:role/AmazonBedrockAgentCore*"
+                  - !Sub "arn:${AWS::Partition}:iam::*:role/service-role/AmazonBedrockAgentCore*"
+              - Sid: CloudWatchLogsAccess
+                Effect: Allow
+                Action:
+                  - "logs:GetLogEvents"
+                  - "logs:DescribeLogGroups"
+                  - "logs:DescribeLogStreams"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:*:*:log-group:/aws/bedrock-agentcore/*"
+                  - !Sub "arn:${AWS::Partition}:logs:*:*:log-group:/aws/codebuild/*"
+              - Sid: CloudWatchLogsPutAccessTransactionSearch
+                Effect: Allow
+                Action:
+                  - "logs:PutResourcePolicy"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group::log-stream"
+              - Sid: S3Access
+                Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "s3:ListBucket"
+                  - "s3:CreateBucket"
+                  - "s3:PutLifecycleConfiguration"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::bedrock-agentcore-*"
+                  - !Sub "arn:${AWS::Partition}:s3:::bedrock-agentcore-*/*"
+              - Sid: ECRRepositoryAccess
+                Effect: Allow
+                Action:
+                  - "ecr:CreateRepository"
+                  - "ecr:DescribeRepositories"
+                  - "ecr:GetRepositoryPolicy"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:PutImage"
+                  - "ecr:UploadLayerPart"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:BatchGetImage"
+                  - "ecr:ListImages"
+                  - "ecr:TagResource"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:ecr:*:*:repository/bedrock-agentcore-*"
+              - Sid: ECRAuthorizationAccess
+                Effect: Allow
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
+        - PolicyName: Other
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: Bedrock
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: "*"
+              - Sid: SSM
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: "*"
+              - Sid: STS
+                Effect: Allow
+                Action:
+                  - sts:GetCallerIdentity
+                Resource: "*"
+              - Sid: XRay
+                Effect: Allow
+                Action:
+                  - xray:GetIndexingRules
+                  - xray:GetTraceSegmentDestination
+                Resource: "*"
+              - Sid: DynamoDb
+                Effect: Allow
+                Action:
+                  - dynamodb:CreateTable
+                  - dynamodb:DescribeTable
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ResearchEvidenceTable.Arn
+                  - !Sub "${ResearchEvidenceTable.Arn}/*"
+
+  StudioDomain:
+    Type: AWS::SageMaker::Domain
+    DeletionPolicy: Retain # Will delete with CleanUpSageMaker custom resource instead
+    UpdateReplacePolicy: Retain # Will delete with CleanUpSageMaker custom resource instead
+    Properties:
+      AppNetworkAccessType: PublicInternetOnly
+      AuthMode: IAM
+      DefaultUserSettings:
+        ExecutionRole: !GetAtt SageMakerExecutionRole.Arn
+      DomainName: !Ref DomainName
+      SubnetIds: !GetAtt DefaultVpcFinder.SubnetIds
+      VpcId: !GetAtt DefaultVpcFinder.VpcId
+
+  UserProfile:
+    Type: AWS::SageMaker::UserProfile
+    DeletionPolicy: Retain # Will delete with CleanUpSageMaker custom resource instead
+    UpdateReplacePolicy: Retain # Will delete with CleanUpSageMaker custom resource instead
+    Properties:
+      DomainId: !GetAtt StudioDomain.DomainId
+      UserProfileName: !Ref UserProfileName
+      UserSettings:
+        ExecutionRole: !GetAtt SageMakerExecutionRole.Arn
+
+  DefaultVpcFinder:
+    Type: Custom::ResourceForFindingDefaultVpc
+    Properties:
+      ServiceToken: !GetAtt DefaultVPCSubnetsLambda.Arn
+
+  DefaultVPCSubnetsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonVPCReadOnlyAccess
+
+  DefaultVPCSubnetsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.13
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 15
+      Architectures:
+        - arm64
+      Role: !GetAtt DefaultVPCSubnetsLambdaRole.Arn
+      Code:
+        ZipFile: |
+          from boto3 import client
+          import cfnresponse
+          import logging
+          import random
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          ec2 = client('ec2')
+
+          def handler(event, context):
+              logger.debug(f'event: {event}')
+              logger.debug(f'context: {context}')
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      # Get the default VPC
+                      filter_vpc = [
+                          {
+                              'Name': 'is-default',
+                              'Values': ['true']
+                          }
+                      ]
+                      logger.debug(f'Calling describe_vpcs. Filter: {filter_vpc}')
+                      describe_vpcs_response = ec2.describe_vpcs(Filters=filter_vpc)
+                      logger.debug(f'Response: {describe_vpcs_response}')
+
+                      vpcs = describe_vpcs_response['Vpcs']
+                      logger.info(f'Found VPC: {vpcs}')
+
+                      if not vpcs:
+                          raise Exception('No default VPC found')
+
+                      default_vpc_id = vpcs[0]['VpcId']
+
+                      # Get subnets in the default VPC
+                      filter_subnets = [
+                          {
+                              'Name': 'vpc-id',
+                              'Values': [default_vpc_id]
+                          }
+                      ]
+                      logger.debug(f'Calling describe_subnets. Filter: {filter_subnets}')
+                      describe_subnet_response = ec2.describe_subnets(Filters=filter_subnets)
+                      logger.debug(f'Response: {describe_subnet_response}')
+                      subnets = describe_subnet_response['Subnets']
+                      logger.info(f'Found subnets: {subnets}')
+
+                      subnet_ids = [subnet['SubnetId'] for subnet in subnets]
+                      logger.debug(f'Subnet IDs: {subnet_ids}')
+
+                      subnet_count = event['ResourceProperties'].get('SubnetCount')
+                      if subnet_count:
+                          # shuffle subnet_ids list
+                          random.shuffle(subnet_ids)
+                          # take the first subnet_count elements
+                          subnet_ids = subnet_ids[:int(subnet_count)]
+                          logger.info(f'Filtered {subnet_count} Subnet IDs: {subnet_ids}')
+
+                      response_data = {
+                          'SubnetIds': subnet_ids,
+                          'VpcId': default_vpc_id
+                      }
+
+                      logger.info(f'ResponseData: {response_data}')
+
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData = response_data, reason = 'OK')
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData = {}, reason = 'No action to take')
+              except Exception as e:
+                  logger.error(f'Error processing request: {e}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  StudioDomainURIParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/sagemaker-studio-domain-uri
+      Description: URI of the Amazon SageMaker Studio Domain
+      Type: String
+      Value: !Sub https://${AWS::Region}.console.aws.amazon.com/sagemaker/home?region=${AWS::Region}#/studio/open/${StudioDomain}/${UserProfileName}
+
+  ###################################################################
+  # Custom Resource: Fully delete SageMaker AI resources
+  ###################################################################
+
+  CleanUpSageMaker:
+    Type: Custom::ResourceForCleaningUpSageMaker
+    Properties:
+      ServiceToken: !GetAtt CleanUpSageMakerLambda.Arn
+      DomainId: !Ref StudioDomain
+      S3Bucket: !Ref StudioBucket
+
+  CleanUpSageMakerLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: LambdaPolicies
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: GetSageMakerExecutionRoleforCleanup
+                Effect: Allow
+                Action: iam:GetRole
+                Resource: !GetAtt SageMakerExecutionRole.Arn
+              - Sid: ListSageMaker
+                Effect: Allow
+                Action:
+                  - sagemaker:ListApps
+                  - sagemaker:ListSpaces
+                  - sagemaker:ListUserProfiles
+                  - sagemaker:ListDomains
+                  - sagemaker:ListEndpoints
+                Resource: "*"
+              - Sid: CleanUpSageMakerApps
+                Effect: Allow
+                Action:
+                  - sagemaker:DeleteApp
+                Resource:
+                  - !Sub arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:app/${StudioDomain}/*
+              - Sid: CleanUpSageMakerSpaces
+                Effect: Allow
+                Action:
+                  - sagemaker:DeleteSpace
+                Resource:
+                  - !Sub arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:space/${StudioDomain}/*
+              - Sid: CleanUpSageMakerUserProfile
+                Effect: Allow
+                Action:
+                  - sagemaker:DeleteUserProfile
+                Resource:
+                  - !Sub arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/${StudioDomain}/*
+              - Sid: CleanUpSageMakerDomains
+                Effect: Allow
+                Action:
+                  - sagemaker:DeleteDomain
+                Resource:
+                  - !Sub arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:domain/${StudioDomain}
+              - Sid: CleanUpSageMakerEndpoints
+                Effect: Allow
+                Action:
+                  - sagemaker:DeleteEndpoint
+                Resource:
+                  - !Sub arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/*
+              - Sid: CleanUpSageMakerS3Bucket
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${StudioBucket}
+              - Sid: CleanUpSageMakerS3BucketObjects
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::${StudioBucket}/*
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+
+  CleanUpSageMakerLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: StudioDomain
+    Properties:
+      ReservedConcurrentExecutions: 5
+      Code:
+        ZipFile: |
+          # Function: CFCleanUpSageMaker
+          # Purpose:  Clean up sagemaker
+          import boto3
+          from botocore.config import Config
+          import cfnresponse
+          import logging
+          from time import sleep
+          LOGGER = logging.getLogger()
+          LOGGER.setLevel(logging.INFO)
+          def emptyBucket(bucket_name, boto_session):
+              LOGGER.info(f"Deleting objects from {bucket_name}")
+              bucket = boto_session.resource("s3").Bucket(bucket_name)
+              bucket.objects.filter().delete()
+              return None
+          def deleteActiveSageMakerEndpoints(sm):
+              endpoints = sm.list_endpoints()
+              active_endpoints = [e.get("EndpointName") for e in endpoints.get("Endpoints")]
+              for endpoint in active_endpoints:
+                  LOGGER.info(f"Deleting Endpoint {endpoint}")
+                  sm.delete_endpoint(EndpointName=endpoint)
+              while len(active_endpoints) > 0:
+                  sleep(5)
+                  endpoints = sm.list_endpoints()
+                  active_endpoints = [e.get("EndpointName") for e in endpoints.get("Endpoints")]
+              return None
+          def deleteAllRunningSageMakerApps(domain_id, sm):
+              apps = sm.list_apps(DomainIdEquals=domain_id)
+              active_apps = [
+                  app for app in apps["Apps"] if app.get("Status") not in ["Deleted", "Deleting", "PendingCheckout"]
+              ]
+              for a in active_apps:
+                  LOGGER.info(f'Deleting app {a["AppName"]}')
+                  response = sm.delete_app(
+                      DomainId=a["DomainId"],
+                      AppType=a["AppType"],
+                      AppName=a["AppName"],
+                      SpaceName=a["SpaceName"]
+                  )
+              while len(active_apps) > 0:
+                  sleep(5)
+                  apps = sm.list_apps(DomainIdEquals=domain_id)
+                  active_apps = [
+                      app for app in apps["Apps"] if app.get("Status") not in ["Deleted"]
+                  ]
+              return None
+          def deleteAllRunningSageMakerSpaces(domain_id, sm):
+              spaces = sm.list_spaces(DomainIdEquals=domain_id)
+              active_spaces = [
+                  space for space in spaces["Spaces"] if space.get("Status") not in ["Deleted", "Deleting", "PendingCheckout"]
+              ]
+              for a in active_spaces:
+                  LOGGER.info(f'Deleting space {a["SpaceName"]}')
+                  sm.delete_space(
+                      DomainId=a["DomainId"],
+                      SpaceName=a["SpaceName"],
+                  )
+              while len(active_spaces) > 0:
+                  sleep(5)
+                  spaces = sm.list_spaces(DomainIdEquals=domain_id)
+                  active_spaces = [
+                      space for space in spaces["Spaces"] if space.get("Status") not in ["Deleted"]
+                  ]
+              return None              
+          def deleteUserProfiles(domain_id, sm):
+              user_profiles = sm.list_user_profiles(DomainIdEquals=domain_id)["UserProfiles"]
+              for profile in user_profiles:
+                  LOGGER.info(f"Deleting User Profile {profile}")
+                  sm.delete_user_profile(
+                      DomainId=domain_id, UserProfileName=profile["UserProfileName"]
+                  )
+              while user_profiles:
+                  sleep(5)
+                  user_profiles = sm.list_user_profiles(DomainIdEquals=domain_id)["UserProfiles"]
+              return None
+          def deleteSageMakerDomainPlusEFS(domain_id, sm):
+              LOGGER.info(f"Deleting SageMaker Domain {domain_id}")
+              sm.delete_domain(
+                  DomainId=domain_id, RetentionPolicy={"HomeEfsFileSystem": "Delete"}
+              )
+              domains = sm.list_domains()
+              while domain_id in [domain.get("DomainId") for domain in domains["Domains"]]:
+                  sleep(5)
+                  domains = sm.list_domains()
+              return None
+          def lambda_handler(event, context):
+              try:
+                  LOGGER.info("REQUEST RECEIVED:\n %s", event)
+                  retry_config = Config(
+                      retries={
+                          'max_attempts': 5,
+                          'mode': 'standard'
+                      }
+                  )
+
+                  boto_session = boto3.session.Session()
+                  sm = boto_session.client("sagemaker", config=retry_config)
+                  if event["RequestType"] == "Create":
+                      LOGGER.info("CREATE!")
+                      cfnresponse.send(
+                          event,
+                          context,
+                          cfnresponse.SUCCESS,
+                          {"response": "Resource creation successful!"},
+                      )
+                  elif event["RequestType"] == "Update":
+                      LOGGER.info("UPDATE!")
+                      cfnresponse.send(
+                          event,
+                          context,
+                          cfnresponse.SUCCESS,
+                          {"response": "Resource update successful!"},
+                      )
+                  elif event["RequestType"] == "Delete":
+                      LOGGER.info("DELETE!")
+                      domain_id = event["ResourceProperties"]["DomainId"]
+                      LOGGER.info("Emptying S3 Bucket")
+                      emptyBucket(event["ResourceProperties"]["S3Bucket"], boto_session)
+                      LOGGER.info("Deleting SageMaker Endpoints")
+                      deleteActiveSageMakerEndpoints(sm)
+                      LOGGER.info("Deleting SageMaker Apps")
+                      deleteAllRunningSageMakerApps(domain_id, sm)
+                      LOGGER.info("Deleting SageMaker Spaces")
+                      deleteAllRunningSageMakerSpaces(domain_id, sm)
+                      LOGGER.info("Deleting SageMaker User Profiles")
+                      deleteUserProfiles(domain_id, sm)
+                      LOGGER.info("Deleting SageMaker Domain")
+                      deleteSageMakerDomainPlusEFS(domain_id, sm)
+                      cfnresponse.send(
+                          event,
+                          context,
+                          cfnresponse.SUCCESS,
+                          {"response": "Resource deletion successful!"},
+                      )
+                  else:
+                      LOGGER.info("FAILED!")
+                      cfnresponse.send(
+                          event,
+                          context,
+                          cfnresponse.FAILED,
+                          {"response": "Unexpected event received from CloudFormation"},
+                      )
+              except Exception as e:
+                  LOGGER.info("FAILED!")
+                  LOGGER.info(e)
+                  cfnresponse.send(
+                      event,
+                      context,
+                      cfnresponse.FAILED,
+                      {"response": "Exception during processing"},
+                  )
+      Description: Clean up Sagemaker
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt CleanUpSageMakerLambdaRole.Arn
+      Runtime: python3.13
+      Timeout: 600
+
+  CreateCodeRepositorySuggestion:
+    Type: Custom::ResourceFoCreatingCodeRepository
+    Properties:
+      ServiceToken: !GetAtt CreateCodeRepositorySuggestionLambda.Arn
+      DomainId: !Ref StudioDomain
+      CodeRepository: !Ref CodeRepository
+
+  CreateCodeRepositorySuggestionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: LambdaPolicies
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: AddCodeRepo
+                Effect: Allow
+                Action:
+                  - sagemaker:UpdateDomain
+                Resource: "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+
+  CreateCodeRepositorySuggestionLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: StudioDomain
+    Properties:
+      Code:
+        ZipFile: |
+          # Function: CreateCodeRepositorySuggestionLambda
+          # Purpose:  Create Code Repository suggestion in SageMaker
+          import boto3
+          import cfnresponse
+          import logging
+          from time import sleep
+          LOGGER = logging.getLogger()
+          LOGGER.setLevel(logging.INFO)
+
+          def create_code_repository(domain_id, repo_url, sagemaker_boto_client):
+              response = sagemaker_boto_client.update_domain(
+                  DomainId=domain_id,
+                  DefaultUserSettings={
+                      "JupyterServerAppSettings": {
+                          "CodeRepositories": [{"RepositoryUrl": repo_url}]
+                      },
+                      "JupyterLabAppSettings": {
+                          "CodeRepositories": [{"RepositoryUrl": repo_url}]
+                      },
+                  },
+              )
+              return None
+
+          def lambda_handler(event, context):
+              try:
+                  LOGGER.info("REQUEST RECEIVED:\n %s", event)
+                  boto_session = boto3.session.Session()
+                  sm = boto_session.client("sagemaker")
+                  if event["RequestType"] == "Create":
+                      LOGGER.info("CREATE!")
+                      create_code_repository(event["ResourceProperties"]["DomainId"], event["ResourceProperties"]["CodeRepository"], sm)
+                      cfnresponse.send(
+                          event,
+                          context,
+                          cfnresponse.SUCCESS,
+                          {"response": "Resource creation successful!"},
+                      )
+                  elif event["RequestType"] == "Update":
+                      LOGGER.info("UPDATE!")
+                      cfnresponse.send(
+                          event,
+                          context,
+                          cfnresponse.SUCCESS,
+                          {"response": "Resource update successful!"},
+                      )
+                  elif event["RequestType"] == "Delete":
+                      LOGGER.info("DELETE!")
+                      cfnresponse.send(
+                          event,
+                          context,
+                          cfnresponse.SUCCESS,
+                          {"response": "Resource deletion successful!"},
+                      )
+                  else:
+                      LOGGER.info("FAILED!")
+                      cfnresponse.send(
+                          event,
+                          context,
+                          cfnresponse.FAILED,
+                          {"response": "Unexpected event received from CloudFormation"},
+                      )
+              except Exception as e:
+                  LOGGER.info("FAILED!")
+                  LOGGER.info(e)
+                  cfnresponse.send(
+                      event,
+                      context,
+                      cfnresponse.FAILED,
+                      {"response": "Exception during processing"},
+                  )
+      Description: Create code repository
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt CreateCodeRepositorySuggestionRole.Arn
+      Runtime: python3.13
+      Timeout: 5
+
+Outputs:
+  StudioDomainURI:
+    Description: URI of the Amazon SageMaker Studio Domain
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/sagemaker/home?region=${AWS::Region}#/studio/open/${StudioDomain}/${UserProfileName}
+  DynamoDBTableName:
+    Description: DynamoDB table name for deep research workshop
+    Value: !Ref ResearchEvidenceTable
+  S3BucketName:
+    Description: Amazon S3 bucket name for deep research workshop
+    Value: !Ref StudioBucket
+  AgentCoreRuntimeRoleArn:
+    Description: ARN for AgentCore Runtime role
+    Value: !GetAtt AgentCoreRuntimeRole.Arn
