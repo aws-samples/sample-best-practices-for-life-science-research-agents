@@ -25,6 +25,11 @@ Resources:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Explicit table name required for workshop consistency and agent configuration"
     Properties:
       TableName: !Ref DynamoDbTableName
       AttributeDefinitions:
@@ -43,6 +48,11 @@ Resources:
           Projection:
             ProjectionType: ALL
       BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
 
   DynamoDBTableNameParameter:
     Type: AWS::SSM::Parameter
@@ -58,6 +68,15 @@ Resources:
 
   AgentCoreRuntimeRole:
     Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Explicit role name required for AgentCore service integration"
+          - id: W11
+            reason: "Wildcard permissions required for AgentCore service operations and Bedrock model access"
+          - id: W76
+            reason: "High SPCM acceptable for AgentCore runtime role with broad service permissions"
     Properties:
       RoleName: !Sub
         - "AmazonBedrockAgentCore-${AWS::Region}-${StackIdSuffix}"
@@ -242,6 +261,13 @@ Resources:
 
   SageMakerExecutionRole:
     Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "Wildcard permissions required for SageMaker service discovery and AgentCore operations"
+          - id: W76
+            reason: "High SPCM acceptable for SageMaker execution role with multiple service integrations"
     Properties:
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -526,6 +552,13 @@ Resources:
 
   DefaultVPCSubnetsLambda:
     Type: AWS::Lambda::Function
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "Lambda function needs to query VPC information and does not require VPC deployment"
+          - id: W92
+            reason: "Reserved concurrent executions not required for infrequent CloudFormation custom resource"
     Properties:
       Runtime: python3.13
       Handler: index.handler
@@ -534,6 +567,7 @@ Resources:
       Architectures:
         - arm64
       Role: !GetAtt DefaultVPCSubnetsLambdaRole.Arn
+      ReservedConcurrentExecutions: 1
       Code:
         ZipFile: |
           from boto3 import client
@@ -629,6 +663,13 @@ Resources:
 
   CleanUpSageMakerLambdaRole:
     Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: "Wildcard permissions required for SageMaker resource discovery and cleanup operations"
+          - id: W76
+            reason: "High SPCM acceptable for cleanup role with broad permissions for resource deletion"
     Properties:
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -709,6 +750,11 @@ Resources:
   CleanUpSageMakerLambda:
     Type: AWS::Lambda::Function
     DependsOn: StudioDomain
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "Lambda function performs cleanup operations and does not require VPC deployment"
     Properties:
       ReservedConcurrentExecutions: 5
       Code:
@@ -898,14 +944,22 @@ Resources:
                 Effect: Allow
                 Action:
                   - sagemaker:UpdateDomain
-                Resource: "*"
+                Resource: !GetAtt StudioDomain.DomainArn
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 
   CreateCodeRepositorySuggestionLambda:
     Type: AWS::Lambda::Function
     DependsOn: StudioDomain
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "Lambda function performs SageMaker configuration and does not require VPC deployment"
+          - id: W92
+            reason: "Reserved concurrent executions not required for infrequent CloudFormation custom resource"
     Properties:
+      ReservedConcurrentExecutions: 1
       Code:
         ZipFile: |
           # Function: CreateCodeRepositorySuggestionLambda
