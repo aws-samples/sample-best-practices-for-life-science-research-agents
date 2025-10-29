@@ -16,6 +16,8 @@ from paperqa.settings import (
     ParsingSettings,
 )
 from strands import tool
+import warnings
+warnings.filterwarnings("ignore", module="litellm")
 
 # Global configuration for commercial use filtering
 COMMERCIAL_USE_ONLY = os.getenv("COMMERCIAL_USE_ONLY", True)
