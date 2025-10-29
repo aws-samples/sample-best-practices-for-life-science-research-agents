@@ -341,7 +341,7 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
 
         except PMCS3Error as e:
             if "not found" not in str(e).lower():
-                logger.error(f"S3 error accessing commercial bucket: {str(e)}")
+                logger.warning(f"S3 error accessing commercial bucket: {str(e)}")
                 raise e
 
             # Try non-commercial bucket
