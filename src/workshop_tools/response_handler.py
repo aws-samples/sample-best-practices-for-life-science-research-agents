@@ -318,9 +318,7 @@ class ResponseHandler:
                 
         except Exception:
             # If extraction fails, return empty string to fall back to full JSON display
-            pass
-        
-        return ""
+            return ""
 
     def _is_strands_event_marker(self, line: str) -> bool:
         """

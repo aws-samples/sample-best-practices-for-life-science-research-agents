@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Literal
 
 # Element only used for type check
 # nosemgrep: use-defused-xml
-from xml.etree.ElementTree import Element
+from xml.etree.ElementTree import Element # nosec
 
 import httpx
 from defusedxml import ElementTree as ET

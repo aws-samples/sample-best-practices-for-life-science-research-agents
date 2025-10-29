@@ -456,7 +456,7 @@ class AgentRuntimeService:
                         if retry_count < max_retries:
                             retry_count += 1
                             # Exponential backoff with jitter
-                            jitter = random.uniform(0, 0.1 * retry_count)
+                            jitter = random.uniform(0, 0.1 * retry_count) # nosec - non-cryptographic use
                             wait_time = min(
                                 base_delay * (2 ** (retry_count - 1)) + jitter, 60.0
                             )
