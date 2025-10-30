@@ -4,3 +4,4 @@ indexes
 __pycache__
 .kiro
 my_papers
+.DS_Store
