@@ -10,7 +10,7 @@ Parameters:
   CodeRepository:
     Type: String
     Description: The URL of a code repository to suggest in the Studio Git window
-    Default: "https://github.com/aws-samples/aws-healthcare-lifescience-ai-ml-sample-notebooks.git"
+    Default: "https://github.com/aws-samples/sample-best-practices-for-life-science-research-agents"
   DynamoDbTableName:
     Type: String
     Description: Table name for the DynamoDb instance used to store evidence
