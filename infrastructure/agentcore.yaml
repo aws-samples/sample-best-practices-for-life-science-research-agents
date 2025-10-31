@@ -6,17 +6,17 @@ Parameters:
     Description: Name for the AgentCore Gateway
     Type: String
     Default: "researchapp-gateway"
-  
+
   MemoryName:
     Description: Name for the AgentCore Memory
     Type: String
     Default: "researchapp_memory"
-  
+
   S3Bucket:
     Description: S3 bucket containing the API specifications
     Type: String
     Default: "researchapp_bucket"
-  
+
   DatabaseApiS3Key:
     Description: S3 key for the database API specification
     Type: String

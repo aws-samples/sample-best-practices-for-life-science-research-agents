@@ -176,7 +176,6 @@ Resources:
                 Resource:
                   - !GetAtt DatabaseLambda.Arn
 
-
   # Lambda target
   DatabaseLambdaRole:
     Type: AWS::IAM::Role
@@ -204,8 +203,6 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
 
-  
-
   DatabaseLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -220,7 +217,7 @@ Resources:
       Architectures:
         - x86_64
       Timeout: 300
-  
+
   GatewayAgentcoreIAMRoleParameter:
     Type: AWS::SSM::Parameter
     Properties:
