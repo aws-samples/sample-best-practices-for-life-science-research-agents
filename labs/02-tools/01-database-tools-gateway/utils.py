@@ -40,7 +40,7 @@ def delete_ssm_parameter(name: str) -> None:
 
 
 def load_api_spec(file_path: str) -> list:
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, list):
         raise ValueError("Expected a list in the JSON file")
