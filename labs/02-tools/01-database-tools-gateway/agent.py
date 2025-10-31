@@ -1,4 +1,9 @@
-from database_tools import get_gateway_access_token, get_all_mcp_tools_from_mcp_client, tool_search, tools_to_strands_mcp_tools
+from database_tools import (
+    get_gateway_access_token,
+    get_all_mcp_tools_from_mcp_client,
+    tool_search,
+    tools_to_strands_mcp_tools,
+)
 from utils import get_ssm_parameter
 from mcp.client.streamable_http import streamablehttp_client
 from strands import Agent
@@ -8,7 +13,7 @@ from strands.tools.mcp import MCPClient
 from bedrock_agentcore_starter_toolkit import BedrockAgentCoreApp
 import time
 
-MAX_TOOLS=10
+MAX_TOOLS = 10
 
 SYSTEM_PROMPT = """
     You are a **Comprehensive Biomedical Research Agent** specialized in  multi-database analyses to answer complex biomedical research questions. Your primary mission is to synthesize evidence from both published literature (PubMed) and real-time database queries to provide comprehensive, evidence-based insights for pharmaceutical research, drug discovery, and clinical decision-making.
@@ -44,7 +49,6 @@ app = BedrockAgentCoreApp()
 
 @app.entrypoint
 async def strands_agent_bedrock(payload):
-    
     """Create and run agent for each invocation"""
 
     # Create model
@@ -59,7 +63,7 @@ async def strands_agent_bedrock(payload):
     jwt_token = get_gateway_access_token()
     if not jwt_token:
         print("❌ Failed to get gateway access token")
-        
+
     # Get gateway endpoint
     gateway_endpoint = get_ssm_parameter("/app/researchapp/agentcore/gateway_url")
     print(f"Gateway Endpoint - MCP URL: {gateway_endpoint}")
@@ -74,22 +78,24 @@ async def strands_agent_bedrock(payload):
     user_input = payload.get("prompt")
 
     client.start()
-    # Use semantic tool search 
+    # Use semantic tool search
     search_query_to_use = user_input
     print(f"\n🔍 Searching for tools with query: '{search_query_to_use}'")
-                
+
     start_time = time.time()
-    tools_found = tool_search(gateway_endpoint, jwt_token, search_query_to_use, max_tools=MAX_TOOLS)
+    tools_found = tool_search(
+        gateway_endpoint, jwt_token, search_query_to_use, max_tools=MAX_TOOLS
+    )
     search_time = time.time() - start_time
-                
+
     if not tools_found:
         print("❌ No tools found from search")
-                    
+
     print(f"✅ Found {len(tools_found)} relevant tools in {search_time:.2f}s")
     print(f"Top tool: {tools_found[0]['name']}")
-                
+
     agent_tools = tools_to_strands_mcp_tools(tools_found, MAX_TOOLS, client)
-    agent = Agent(system_prompt=SYSTEM_PROMPT,model=model, tools=agent_tools)
+    agent = Agent(system_prompt=SYSTEM_PROMPT, model=model, tools=agent_tools)
 
     print("User input:", user_input)
     # Stream response
@@ -107,7 +113,9 @@ async def strands_agent_bedrock(payload):
                     if "toolResult" in obj:
                         pass  # Skip tool result display
                     elif "reasoningContent" in obj:
-                        reasoning_text = obj["reasoningContent"]["reasoningText"]["text"]
+                        reasoning_text = obj["reasoningContent"]["reasoningText"][
+                            "text"
+                        ]
                         yield f"\n\n🔧 Reasoning: {reasoning_text}\n\n"
             if "data" in event:
                 tool_name = None
@@ -116,7 +124,6 @@ async def strands_agent_bedrock(payload):
         yield f"Error processing request: {str(e)}"
     finally:
         client.close()
-        
 
 
 if __name__ == "__main__":

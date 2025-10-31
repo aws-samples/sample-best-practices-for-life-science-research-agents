@@ -50,23 +50,15 @@ def create_cognito_provider(provider_name: str) -> dict:
     """Create a Cognito OAuth2 credential provider."""
     try:
         click.echo("📥 Fetching Cognito configuration from SSM...")
-        client_id = get_ssm_parameter(
-            "/app/researchapp/agentcore/machine_client_id"
-        )
+        client_id = get_ssm_parameter("/app/researchapp/agentcore/machine_client_id")
         click.echo(f"✅ Retrieved client ID: {client_id}")
 
-        client_secret = get_ssm_parameter(
-            "/app/researchapp/agentcore/cognito_secret"
-        )
+        client_secret = get_ssm_parameter("/app/researchapp/agentcore/cognito_secret")
         click.echo(f"✅ Retrieved client secret: {client_secret[:4]}***")
 
-        issuer = get_ssm_parameter(
-            "/app/researchapp/agentcore/cognito_discovery_url"
-        )
+        issuer = get_ssm_parameter("/app/researchapp/agentcore/cognito_discovery_url")
         auth_url = get_ssm_parameter("/app/researchapp/agentcore/cognito_auth_url")
-        token_url = get_ssm_parameter(
-            "/app/researchapp/agentcore/cognito_token_url"
-        )
+        token_url = get_ssm_parameter("/app/researchapp/agentcore/cognito_token_url")
 
         click.echo(f"✅ Issuer: {issuer}")
         click.echo(f"✅ Authorization Endpoint: {auth_url}")
