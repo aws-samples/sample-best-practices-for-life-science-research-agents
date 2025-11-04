@@ -551,6 +551,7 @@ def query_uniprot(
             os.path.dirname(__file__), "schema_db", "uniprot.pkl"
         )
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             uniprot_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -807,6 +808,7 @@ def query_interpro(
             os.path.dirname(__file__), "schema_db", "interpro.pkl"
         )
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             interpro_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -913,6 +915,7 @@ def query_pdb(
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "pdb.pkl")
 
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -1159,6 +1162,7 @@ def query_stringdb(
             os.path.dirname(__file__), "schema_db", "stringdb.pkl"
         )
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             stringdb_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -1332,6 +1336,7 @@ def query_paleobiology(
         # Load PBDB schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "pbdb.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             pbdb_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -1471,6 +1476,7 @@ def query_jaspar(
         # Load JASPAR schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "jaspar.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             jaspar_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -1582,6 +1588,7 @@ def query_worms(
         # Load WoRMS schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "worms.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             worms_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -1692,6 +1699,7 @@ def query_cbioportal(
             os.path.dirname(__file__), "schema_db", "cbioportal.pkl"
         )
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             cbioportal_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -1793,6 +1801,7 @@ def query_clinvar(
             os.path.dirname(__file__), "schema_db", "clinvar.pkl"
         )
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             clinvar_schema = pickle.load(f)  # nosec B301
 
         # ClinVar system prompt template
@@ -1883,6 +1892,7 @@ def query_geo(
         # Load GEO schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "geo.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             geo_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -1979,6 +1989,7 @@ def query_dbsnp(
         # Load dbSNP schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "dbsnp.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             dbsnp_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -2072,6 +2083,7 @@ def query_ucsc(
         # Load UCSC schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "ucsc.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             ucsc_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -2183,6 +2195,7 @@ def query_ensembl(
             os.path.dirname(__file__), "schema_db", "ensembl.pkl"
         )
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             ensembl_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -2313,6 +2326,7 @@ def query_opentarget(
             os.path.dirname(__file__), "schema_db", "opentarget.pkl"
         )
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             opentarget_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -2418,6 +2432,7 @@ def query_monarch(
         )
         if os.path.exists(schema_path):
             with open(schema_path, "rb") as f:
+                # nosemgrep: avoid-pickle
                 monarch_schema = pickle.load(f)  # nosec B301
         else:
             monarch_schema = None
@@ -2541,6 +2556,7 @@ def query_openfda(
         )
         if os.path.exists(schema_path):
             with open(schema_path, "rb") as f:
+                # nosemgrep: avoid-pickle
                 openfda_schema = pickle.load(f)  # nosec B301
         else:
             openfda_schema = None
@@ -2783,6 +2799,7 @@ def query_gwas_catalog(
             os.path.dirname(__file__), "schema_db", "gwas_catalog.pkl"
         )
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             gwas_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -2886,6 +2903,7 @@ def query_gnomad(
         # Load gnomAD schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "gnomad.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             gnomad_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -3001,6 +3019,7 @@ def query_reactome(
             os.path.dirname(__file__), "schema_db", "reactome.pkl"
         )
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             reactome_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -3257,6 +3276,7 @@ def query_pride(
         # Load PRIDE schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "pride.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             pride_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -3358,6 +3378,7 @@ def query_gtopdb(
         # Load GtoPdb schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "gtopdb.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             gtopdb_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -3645,6 +3666,7 @@ def query_mpd(
         # Load MPD schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "mpd.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             mpd_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
@@ -3753,6 +3775,7 @@ def query_emdb(
         # Load EMDB schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "emdb.pkl")
         with open(schema_path, "rb") as f:
+            # nosemgrep: avoid-pickle
             emdb_schema = pickle.load(f)  # nosec B301
 
         # Create system prompt template
