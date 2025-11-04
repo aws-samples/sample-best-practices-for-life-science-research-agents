@@ -2,6 +2,16 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: "CloudFormation template for AgentCore Resources"
 
 Parameters:
+  LambdaCodeS3Key:
+    Description: The S3 object key for the lambda function code (app.zip)
+    Type: String
+    Default: build/app.zip
+
+  LambdaDependenciesS3Key:
+    Description: The S3 object key for the lambda dependencies layer (dependencies.zip)
+    Type: String
+    Default: build/dependencies.zip
+
   GatewayName:
     Description: Name for the AgentCore Gateway
     Type: String
@@ -12,17 +22,365 @@ Parameters:
     Type: String
     Default: "researchapp_memory"
 
-  S3Bucket:
-    Description: S3 bucket containing the API specifications
-    Type: String
-    Default: "researchapp_bucket"
-
-  DatabaseApiS3Key:
+  LambdaTargetS3Key:
     Description: S3 key for the database API specification
     Type: String
-    Default: "api-specs/database-api-spec.json"
+    Default: "build/api_spec.json"
 
 Resources:
+  #########################################################
+  # AgentCore
+  #########################################################
+
+  AgentCoreRuntimeRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Explicit role name required for AgentCore service integration"
+          - id: W11
+            reason: "Wildcard permissions required for AgentCore service operations and Bedrock model access"
+          - id: W76
+            reason: "High SPCM acceptable for AgentCore runtime role with broad service permissions"
+    Properties:
+      RoleName: !Sub
+        - "AmazonBedrockAgentCore-${AWS::Region}-${StackIdSuffix}"
+        - StackIdSuffix:
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]],
+            ]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*"
+      Policies:
+        - PolicyName: StandardAgentCoreRuntimeExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ECRImageAccess
+                Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/*"
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogStreams
+                  - logs:CreateLogGroup
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*"
+              - Sid: ECRTokenAccess
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource:
+                  - "*"
+              - Effect: Allow
+                Resource: "*"
+                Action: cloudwatch:PutMetricData
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: bedrock-agentcore
+              - Sid: GetAgentAccessToken
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:GetWorkloadAccessToken
+                  - bedrock-agentcore:GetWorkloadAccessTokenForJWT
+                  - bedrock-agentcore:GetWorkloadAccessTokenForUserId
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default"
+                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/*"
+              - Sid: BedrockModelInvocation
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
+                  - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:*"
+              - Sid: MarketplaceOperationsFromBedrockFor3pModels
+                Effect: Allow
+                Action:
+                  - "aws-marketplace:Subscribe"
+                  - "aws-marketplace:ViewSubscriptions"
+                  - "aws-marketplace:Unsubscribe"
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:CalledViaLast: "bedrock.amazonaws.com"
+        - PolicyName: DynamoDb
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: DynamoDb
+                Effect: Allow
+                Action:
+                  - dynamodb:CreateTable
+                  - dynamodb:DescribeTable
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource:
+                  - "{{resolve:ssm:/deep-research-workshop/table-arn}}"
+                  - "{{resolve:ssm:/deep-research-workshop/table-arn}}/*"
+
+  AgentCoreRuntimeRoleArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/agentcore-runtime-role-arn
+      Description: ARN for AgentCore Runtime role
+      Type: String
+      Value: !GetAtt AgentCoreRuntimeRole.Arn
+
+  RuntimeAgentCoreRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - bedrock-agentcore.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: BedrockAgentPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ECRImageAccess
+                Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource:
+                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/bedrock-agentcore-researchapp*
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogStreams
+                  - logs:CreateLogGroup
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*
+              - Effect: Allow
+                Action:
+                  - logs:DescribeLogGroups
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*
+              - Sid: ECRTokenAccess
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: bedrock-agentcore
+              - Sid: GetAgentAccessToken
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:GetWorkloadAccessToken
+                  - bedrock-agentcore:GetWorkloadAccessTokenForJWT
+                  - bedrock-agentcore:GetWorkloadAccessTokenForUserId
+                Resource:
+                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default
+                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/researchapp*
+              - Sid: ProvisionedThroughputModelInvocation
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - "arn:aws:bedrock:*::foundation-model/*"
+                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:*
+              - Sid: SSMGetparam
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/deep-research-workshop/*
+              - Sid: Identity
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:GetResourceOauth2Token
+                Resource:
+                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default/oauth2credentialprovider/researchapp*
+                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/researchapp*
+                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default
+                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default
+              - Sid: SecretManager
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:bedrock-agentcore-identity!default/oauth2/researchapp*
+              - Sid: AgentCoreMemory
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:ListMemories
+                  - bedrock-agentcore:ListMemoryRecords
+                  - bedrock-agentcore:RetrieveMemoryRecords
+                  - bedrock-agentcore:GetMemory
+                  - bedrock-agentcore:GetMemoryRecord
+                  - bedrock-agentcore:CreateEvent
+                  - bedrock-agentcore:GetEvent
+                  - bedrock-agentcore:ListEvents
+                Resource:
+                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*
+              - Sid: BedrockKnowledgeBase
+                Effect: Allow
+                Action:
+                  - bedrock:GetKnowledgeBase
+                  - bedrock:GetKnowledgeBaseDocuments
+                  - bedrock:ListKnowledgeBases
+                  - bedrock:RetrieveAndGenerate
+                  - bedrock:Retrieve
+                Resource:
+                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+              - Sid: CognitoIDP
+                Effect: Allow
+                Action:
+                  - cognito-idp:ListResourceServers
+                  - cognito-idp:DescribeResourceServer
+                  - cognito-idp:ListIdentityProviders
+                  - cognito-idp:ListUserPools
+                Resource:
+                  - !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+
+  GatewayAgentCoreRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - bedrock-agentcore.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: BedrockAgentPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: InvokeFunction
+                Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt DatabaseLambda.Arn
+              - Sid: GetLambdaTargetSchema
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::{{resolve:ssm:/deep-research-workshop/s3-bucket-name}}/*"
+
+  # Lambda target
+  DatabaseLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /service-role/
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvokePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - "arn:aws:bedrock:*::foundation-model/*"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:*"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  DatabaseLambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: research-agent-dependencies
+      Description: Dependencies for the Database Lambda function
+      Content:
+        S3Bucket: "{{resolve:ssm:/deep-research-workshop/s3-bucket-name}}"
+        S3Key: !Ref LambdaDependenciesS3Key
+      CompatibleRuntimes:
+        - python3.12
+      CompatibleArchitectures:
+        - arm64
+
+  DatabaseLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: "Lambda function for Research ResearchApp Assistant"
+      Handler: lambda_function.lambda_handler
+      Code:
+        S3Bucket: "{{resolve:ssm:/deep-research-workshop/s3-bucket-name}}"
+        S3Key: !Ref LambdaCodeS3Key
+      Role: !GetAtt DatabaseLambdaRole.Arn
+      Runtime: python3.12
+      PackageType: Zip
+      Architectures:
+        - arm64
+      Timeout: 300
+      Layers:
+        - !Ref DatabaseLambdaLayer
+
   AgentCoreMemory:
     Type: AWS::BedrockAgentCore::Memory
     Properties:
@@ -51,7 +409,7 @@ Resources:
   MemoryIdParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/memory_id
+      Name: /deep-research-workshop/agentcore/memory_id
       Type: String
       Value: !Ref AgentCoreMemory
       Description: AgentCore Memory ID
@@ -61,7 +419,7 @@ Resources:
   GatewayUrlParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/gateway_url
+      Name: /deep-research-workshop/agentcore/gateway_url
       Type: String
       Value: !GetAtt AgentCoreGateway.GatewayUrl
       Description: AgentCore Gateway URL
@@ -75,12 +433,12 @@ Resources:
       Description: "Research App AgentCore Gateway"
       AuthorizerType: "CUSTOM_JWT"
       ProtocolType: "MCP"
-      RoleArn: "{{resolve:ssm:/app/researchapp/agentcore/gateway_iam_role}}"
+      RoleArn: !GetAtt GatewayAgentCoreRole.Arn
       AuthorizerConfiguration:
         CustomJWTAuthorizer:
           AllowedClients:
-            - "{{resolve:ssm:/app/researchapp/agentcore/machine_client_id}}"
-          DiscoveryUrl: "{{resolve:ssm:/app/researchapp/agentcore/cognito_discovery_url}}"
+            - "{{resolve:ssm:/deep-research-workshop/agentcore/machine_client_id}}"
+          DiscoveryUrl: "{{resolve:ssm:/deep-research-workshop/agentcore/cognito_discovery_url}}"
       ProtocolConfiguration:
         Mcp:
           SearchType: "SEMANTIC"
@@ -96,14 +454,18 @@ Resources:
       TargetConfiguration:
         Mcp:
           Lambda:
-            LambdaArn: "{{resolve:ssm:/app/researchapp/agentcore/lambda_arn}}"
+            LambdaArn: !GetAtt DatabaseLambda.Arn
             ToolSchema:
               S3:
-                Uri: !Sub "s3://${S3Bucket}/${DatabaseApiS3Key}"
+                Uri: !Sub "s3://{{resolve:ssm:/deep-research-workshop/s3-bucket-name}}/${LambdaTargetS3Key}"
       CredentialProviderConfigurations:
         - CredentialProviderType: "GATEWAY_IAM_ROLE"
 
 Outputs:
+  AgentCoreRuntimeRoleArn:
+    Description: ARN for AgentCore Runtime role
+    Value: !GetAtt AgentCoreRuntimeRole.Arn
+
   MemoryId:
     Description: "AgentCore Memory ID"
     Value: !Ref AgentCoreMemory

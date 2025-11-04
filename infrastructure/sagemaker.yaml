@@ -11,196 +11,8 @@ Parameters:
     Type: String
     Description: The URL of a code repository to suggest in the Studio Git window
     Default: "https://github.com/aws-samples/sample-best-practices-for-life-science-research-agents"
-  DynamoDbTableName:
-    Type: String
-    Description: Table name for the DynamoDb instance used to store evidence
-    Default: "deep-research-evidence"
 
 Resources:
-  #########################################################
-  # DynamoDB
-  #########################################################
-
-  ResearchEvidenceTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W28
-            reason: "Explicit table name required for workshop consistency and agent configuration"
-    Properties:
-      TableName: !Ref DynamoDbTableName
-      AttributeDefinitions:
-        - AttributeName: evidence_id
-          AttributeType: S
-        - AttributeName: source
-          AttributeType: S
-      KeySchema:
-        - AttributeName: evidence_id
-          KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: source_index
-          KeySchema:
-            - AttributeName: source
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-      BillingMode: PAY_PER_REQUEST
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: KMS
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-
-  DynamoDBTableNameParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /deep-research-workshop/table-name
-      Description: DynamoDB table name for deep research workshop
-      Type: String
-      Value: !Ref ResearchEvidenceTable
-
-  #########################################################
-  # AgentCore
-  #########################################################
-
-  AgentCoreRuntimeRole:
-    Type: AWS::IAM::Role
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W28
-            reason: "Explicit role name required for AgentCore service integration"
-          - id: W11
-            reason: "Wildcard permissions required for AgentCore service operations and Bedrock model access"
-          - id: W76
-            reason: "High SPCM acceptable for AgentCore runtime role with broad service permissions"
-    Properties:
-      RoleName: !Sub
-        - "AmazonBedrockAgentCore-${AWS::Region}-${StackIdSuffix}"
-        - StackIdSuffix:
-            !Select [
-              4,
-              !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]],
-            ]
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: bedrock-agentcore.amazonaws.com
-            Action: sts:AssumeRole
-            Condition:
-              StringEquals:
-                aws:SourceAccount: !Ref AWS::AccountId
-              ArnLike:
-                aws:SourceArn: !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*"
-      Policies:
-        - PolicyName: StandardAgentCoreRuntimeExecutionPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Sid: ECRImageAccess
-                Effect: Allow
-                Action:
-                  - ecr:BatchGetImage
-                  - ecr:GetDownloadUrlForLayer
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/*"
-              - Effect: Allow
-                Action:
-                  - logs:DescribeLogStreams
-                  - logs:CreateLogGroup
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
-              - Effect: Allow
-                Action:
-                  - logs:DescribeLogGroups
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*"
-              - Sid: ECRTokenAccess
-                Effect: Allow
-                Action:
-                  - ecr:GetAuthorizationToken
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - xray:PutTraceSegments
-                  - xray:PutTelemetryRecords
-                  - xray:GetSamplingRules
-                  - xray:GetSamplingTargets
-                Resource:
-                  - "*"
-              - Effect: Allow
-                Resource: "*"
-                Action: cloudwatch:PutMetricData
-                Condition:
-                  StringEquals:
-                    cloudwatch:namespace: bedrock-agentcore
-              - Sid: GetAgentAccessToken
-                Effect: Allow
-                Action:
-                  - bedrock-agentcore:GetWorkloadAccessToken
-                  - bedrock-agentcore:GetWorkloadAccessTokenForJWT
-                  - bedrock-agentcore:GetWorkloadAccessTokenForUserId
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default"
-                  - !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/*"
-              - Sid: BedrockModelInvocation
-                Effect: Allow
-                Action:
-                  - bedrock:InvokeModel
-                  - bedrock:InvokeModelWithResponseStream
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
-                  - !Sub "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:*"
-              - Sid: MarketplaceOperationsFromBedrockFor3pModels
-                Effect: Allow
-                Action:
-                  - "aws-marketplace:Subscribe"
-                  - "aws-marketplace:ViewSubscriptions"
-                  - "aws-marketplace:Unsubscribe"
-                Resource: "*"
-                Condition:
-                  StringEquals:
-                    aws:CalledViaLast: "bedrock.amazonaws.com"
-        - PolicyName: DynamoDb
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Sid: DynamoDb
-                Effect: Allow
-                Action:
-                  - dynamodb:CreateTable
-                  - dynamodb:DescribeTable
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:Scan
-                  - dynamodb:Query
-                Resource:
-                  - !GetAtt ResearchEvidenceTable.Arn
-                  - !Sub "${ResearchEvidenceTable.Arn}/*"
-
-  AgentCoreRuntimeRoleArnParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /deep-research-workshop/agentcore-runtime-role-arn
-      Description: ARN for AgentCore Runtime role
-      Type: String
-      Value: !GetAtt AgentCoreRuntimeRole.Arn
-
-  #########################################################
-  # SageMaker
-  #########################################################
-
   StudioBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
@@ -510,8 +322,8 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:Query
                 Resource:
-                  - !GetAtt ResearchEvidenceTable.Arn
-                  - !Sub "${ResearchEvidenceTable.Arn}/*"
+                  - "{{resolve:ssm:/deep-research-workshop/table-arn}}"
+                  - "{{resolve:ssm:/deep-research-workshop/table-arn}}/*"
 
   StudioDomain:
     Type: AWS::SageMaker::Domain
@@ -1048,12 +860,6 @@ Outputs:
   StudioDomainURI:
     Description: URI of the Amazon SageMaker Studio Domain
     Value: !Sub https://${AWS::Region}.console.aws.amazon.com/sagemaker/home?region=${AWS::Region}#/studio/open/${StudioDomain}/${UserProfileName}
-  DynamoDBTableName:
-    Description: DynamoDB table name for deep research workshop
-    Value: !Ref ResearchEvidenceTable
   S3BucketName:
     Description: Amazon S3 bucket name for deep research workshop
     Value: !Ref StudioBucket
-  AgentCoreRuntimeRoleArn:
-    Description: ARN for AgentCore Runtime role
-    Value: !GetAtt AgentCoreRuntimeRole.Arn

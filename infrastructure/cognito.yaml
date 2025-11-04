@@ -227,7 +227,7 @@ Resources:
   CognitoMachineClientIdParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/machine_client_id
+      Name: /deep-research-workshop/agentcore/machine_client_id
       Type: String
       Value: !Ref MachineUserPoolClient
       Description: Machine Cognito client ID
@@ -237,7 +237,7 @@ Resources:
   CognitoMachineClientSecretParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/cognito_secret
+      Name: /deep-research-workshop/agentcore/cognito_secret
       Type: String
       Value: !GetAtt MachineUserPoolClient.ClientSecret
       Description: Machine Cognito client secret
@@ -247,7 +247,7 @@ Resources:
   CognitoWebClientIdParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/web_client_id
+      Name: /deep-research-workshop/agentcore/web_client_id
       Type: String
       Value: !Ref WebUserPoolClient
       Description: Cognito client ID for web app
@@ -257,7 +257,7 @@ Resources:
   UserPoolIdParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/userpool_id
+      Name: /deep-research-workshop/agentcore/userpool_id
       Type: String
       Value: !Ref UserPool
       Description: Cognito client ID
@@ -267,7 +267,7 @@ Resources:
   CognitoAuthScopeParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/cognito_auth_scope
+      Name: /deep-research-workshop/agentcore/cognito_auth_scope
       Type: String
       Value: !Join
         - ""
@@ -284,7 +284,7 @@ Resources:
   CognitoDiscoveryURLParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/cognito_discovery_url
+      Name: /deep-research-workshop/agentcore/cognito_discovery_url
       Type: String
       Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/openid-configuration"
       Description: OAuth2 Discovery URL
@@ -294,7 +294,7 @@ Resources:
   CognitoTokenURLParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/cognito_token_url
+      Name: /deep-research-workshop/agentcore/cognito_token_url
       Type: String
       Value: !Join
         - ""
@@ -311,7 +311,7 @@ Resources:
   CognitoAuthorizeURLParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/cognito_auth_url
+      Name: /deep-research-workshop/agentcore/cognito_auth_url
       Type: String
       Value: !Join
         - ""
@@ -328,7 +328,7 @@ Resources:
   CognitoDomainParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /app/researchapp/agentcore/cognito_domain
+      Name: /deep-research-workshop/agentcore/cognito_domain
       Type: String
       Value: !Join
         - ""
