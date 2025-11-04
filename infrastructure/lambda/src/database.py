@@ -1,4 +1,7 @@
-# This script is adapted from Biomni https://github.com/snap-stanford/Biomni/blob/main/biomni/tool/database.py and have removed the following commercial license tools 'kegg', 'iucn', and 'remap'. It invokes Amazon Bedrock LLMs directly with the converse API. Note, this script depends upon you setting up the schema folder under 'schema_db'
+# This script is adapted from Biomni https://github.com/snap-stanford/Biomni/blob/main/biomni/tool/database.py
+# and have removed the following commercial license tools 'kegg', 'iucn', and 'remap'. 
+# It invokes Amazon Bedrock LLMs directly with the converse API. Note, this script depends upon you setting up 
+# the schema folder under 'schema_db'
 import json
 import sys
 import os
