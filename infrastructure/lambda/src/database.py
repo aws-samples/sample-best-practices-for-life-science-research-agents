@@ -1418,7 +1418,7 @@ def query_jaspar(
         2. "description": A brief description of what the query is doing
 
         SPECIAL NOTES:
-        - Common taxonomic groups include: vertebrates, plants, fungi, insects, nematodes, urochordates
+        - Common taxonomic groups include: vertebrates, plants, fungi, inosects, nematodes, urochordates
         - Common collections include: CORE, UNVALIDATED, PENDING, etc.
         - Matrix IDs follow the format MA####.# (e.g., MA0002.2)
         - For inferring matrices from sequences, provide the protein sequence directly in the path
@@ -1695,7 +1695,7 @@ def query_clinvar(
         # Load ClinVar schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "clinvar.pkl")
         with open(schema_path, "rb") as f:
-            clinvar_schema = pickle.load(f)
+            clinvar_schema = pickle.load(f) # nosec B301
 
         # ClinVar system prompt template
         system_prompt_template = """
@@ -1785,7 +1785,7 @@ def query_geo(
         # Load GEO schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "geo.pkl")
         with open(schema_path, "rb") as f:
-            geo_schema = pickle.load(f) # nsec B301
+            geo_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -1881,7 +1881,7 @@ def query_dbsnp(
         # Load dbSNP schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "dbsnp.pkl")
         with open(schema_path, "rb") as f:
-            dbsnp_schema = pickle.load(f) # nsec B301
+            dbsnp_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -1974,7 +1974,7 @@ def query_ucsc(
         # Load UCSC schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "ucsc.pkl")
         with open(schema_path, "rb") as f:
-            ucsc_schema = pickle.load(f) # nsec B301
+            ucsc_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -2076,7 +2076,7 @@ def query_ensembl(
         # Load Ensembl schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "ensembl.pkl")
         with open(schema_path, "rb") as f:
-            ensembl_schema = pickle.load(f) # nsec B301
+            ensembl_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -2199,7 +2199,7 @@ def query_opentarget(
         # Load OpenTargets schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "opentarget.pkl")
         with open(schema_path, "rb") as f:
-            opentarget_schema = pickle.load(f) # nsec B301
+            opentarget_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -2297,7 +2297,7 @@ def query_monarch(
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "monarch.pkl")
         if os.path.exists(schema_path):
             with open(schema_path, "rb") as f:
-                monarch_schema = pickle.load(f) # nsec B301
+                monarch_schema = pickle.load(f) # nosec B301
         else:
             monarch_schema = None
 
@@ -2409,7 +2409,7 @@ def query_openfda(
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "openfda.pkl")
         if os.path.exists(schema_path):
             with open(schema_path, "rb") as f:
-                openfda_schema = pickle.load(f) # nsec B301
+                openfda_schema = pickle.load(f) # nosec B301
         else:
             openfda_schema = None
 
@@ -2629,7 +2629,7 @@ def query_gwas_catalog(
         # Load GWAS Catalog schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "gwas_catalog.pkl")
         with open(schema_path, "rb") as f:
-            gwas_schema = pickle.load(f) # nsec B301
+            gwas_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -2730,7 +2730,7 @@ def query_gnomad(
         # Load gnomAD schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "gnomad.pkl")
         with open(schema_path, "rb") as f:
-            gnomad_schema = pickle.load(f) # nsec B301
+            gnomad_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -2840,7 +2840,7 @@ def query_reactome(
         # Load Reactome schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "reactome.pkl")
         with open(schema_path, "rb") as f:
-            reactome_schema = pickle.load(f) # nsec B301
+            reactome_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -3078,7 +3078,7 @@ def query_pride(
         # Load PRIDE schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "pride.pkl")
         with open(schema_path, "rb") as f:
-            pride_schema = pickle.load(f) # nsec B301
+            pride_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -3177,7 +3177,7 @@ def query_gtopdb(
         # Load GtoPdb schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "gtopdb.pkl")
         with open(schema_path, "rb") as f:
-            gtopdb_schema = pickle.load(f) # nsec B301
+            gtopdb_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = r"""
@@ -3447,7 +3447,7 @@ def query_mpd(
         # Load MPD schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "mpd.pkl")
         with open(schema_path, "rb") as f:
-            mpd_schema = pickle.load(f) # nsec B301
+            mpd_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
@@ -3548,7 +3548,7 @@ def query_emdb(
         # Load EMDB schema
         schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "emdb.pkl")
         with open(schema_path, "rb") as f:
-            emdb_schema = pickle.load(f) # nsec B301
+            emdb_schema = pickle.load(f) # nosec B301
 
         # Create system prompt template
         system_template = """
