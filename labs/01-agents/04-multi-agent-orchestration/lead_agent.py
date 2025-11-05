@@ -33,6 +33,7 @@ model = BedrockModel(
     model_id=MODEL_ID,
     max_tokens=10000,
     cache_prompt="default",
+    cache_tools="default",
     temperature=1,
     additional_request_fields={
         "anthropic_beta": ["interleaved-thinking-2025-05-14"],
