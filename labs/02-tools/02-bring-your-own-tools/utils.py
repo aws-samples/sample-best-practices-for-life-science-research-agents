@@ -102,7 +102,8 @@ def get_gateway_access_token():
         response = requests.post(
             token_url, 
             data=token_data, 
-            headers={"Content-Type": "application/x-www-form-urlencoded"}
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=30
         )
         
         if response.status_code != 200:

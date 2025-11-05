@@ -8,7 +8,6 @@ import boto3
 import requests
 from typing import Any, Dict, List, Literal
 from utils import get_ssm_parameter
-import requests
 from strands.tools.mcp import MCPClient, MCPAgentTool
 from mcp.types import Tool as MCPTool
 from mcp.client.streamable_http import streamablehttp_client
@@ -61,7 +60,8 @@ def get_gateway_access_token():
         response = requests.post(
             token_url, 
             data=token_data, 
-            headers={"Content-Type": "application/x-www-form-urlencoded"}
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=30
         )
         
         if response.status_code != 200:
@@ -111,6 +111,7 @@ def tool_search(gateway_endpoint, jwt_token, query, max_tools=5):
             "Authorization": f"Bearer {jwt_token}",
             "Content-Type": "application/json",
         },
+        timeout=30
     )
     
     if response.status_code == 200:
