@@ -1,19 +1,17 @@
-from database_tools import (
-    get_gateway_access_token,
-    get_all_mcp_tools_from_mcp_client,
-    tool_search,
-    tools_to_strands_mcp_tools,
-)
+from database_tools import get_gateway_access_token, get_all_mcp_tools_from_mcp_client, tool_search, tools_to_strands_mcp_tools
 from utils import get_ssm_parameter
 from mcp.client.streamable_http import streamablehttp_client
 from strands import Agent
 from strands_tools import current_time
 from strands.models import BedrockModel
 from strands.tools.mcp import MCPClient
-from bedrock_agentcore_starter_toolkit import BedrockAgentCoreApp
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
 import time
+import uuid
+from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
+from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
-MAX_TOOLS = 10
+MAX_TOOLS=10
 
 SYSTEM_PROMPT = """
     You are a **Comprehensive Biomedical Research Agent** specialized in  multi-database analyses to answer complex biomedical research questions. Your primary mission is to synthesize evidence from both published literature (PubMed) and real-time database queries to provide comprehensive, evidence-based insights for pharmaceutical research, drug discovery, and clinical decision-making.
@@ -49,6 +47,7 @@ app = BedrockAgentCoreApp()
 
 @app.entrypoint
 async def strands_agent_bedrock(payload):
+    
     """Create and run agent for each invocation"""
 
     # Create model
@@ -63,9 +62,9 @@ async def strands_agent_bedrock(payload):
     jwt_token = get_gateway_access_token()
     if not jwt_token:
         print("❌ Failed to get gateway access token")
-
+        
     # Get gateway endpoint
-    gateway_endpoint = get_ssm_parameter("/app/researchapp/agentcore/gateway_url")
+    gateway_endpoint = get_ssm_parameter("/deep-research-workshop/agentcore/gateway_url")
     print(f"Gateway Endpoint - MCP URL: {gateway_endpoint}")
 
     # Create MCP client
@@ -75,27 +74,46 @@ async def strands_agent_bedrock(payload):
         )
     )
 
+    # Configure memory
+    mem_arn = get_ssm_parameter("/deep-research-workshop/agentcore/memory_id")
+    mem_id = mem_arn.split("/")[-1]
+
     user_input = payload.get("prompt")
+    actor_id = payload.get("actor_id", "DEFAULT")
+    session_id = payload.get("session_id", "DEFAULT")
+
+    if not session_id:
+        raise Exception("Context session_id is not set")
+    
+    agentcore_memory_config = AgentCoreMemoryConfig(
+        memory_id=mem_id,
+        session_id=session_id,
+        actor_id=actor_id
+    )
+        
+    session_manager = AgentCoreMemorySessionManager(
+        agentcore_memory_config=agentcore_memory_config
+    )
+
+    
 
     client.start()
-    # Use semantic tool search
+    # Use semantic tool search 
     search_query_to_use = user_input
     print(f"\n🔍 Searching for tools with query: '{search_query_to_use}'")
-
+                
     start_time = time.time()
-    tools_found = tool_search(
-        gateway_endpoint, jwt_token, search_query_to_use, max_tools=MAX_TOOLS
-    )
+    tools_found = tool_search(gateway_endpoint, jwt_token, search_query_to_use, max_tools=MAX_TOOLS)
     search_time = time.time() - start_time
-
+                
     if not tools_found:
         print("❌ No tools found from search")
-
+                    
     print(f"✅ Found {len(tools_found)} relevant tools in {search_time:.2f}s")
     print(f"Top tool: {tools_found[0]['name']}")
-
+                
     agent_tools = tools_to_strands_mcp_tools(tools_found, MAX_TOOLS, client)
-    agent = Agent(system_prompt=SYSTEM_PROMPT, model=model, tools=agent_tools)
+    agent = Agent(system_prompt=SYSTEM_PROMPT,model=model, tools=agent_tools, session_manager=session_manager, agent_id=str(uuid.uuid4()))
 
     print("User input:", user_input)
     # Stream response
@@ -113,9 +131,7 @@ async def strands_agent_bedrock(payload):
                     if "toolResult" in obj:
                         pass  # Skip tool result display
                     elif "reasoningContent" in obj:
-                        reasoning_text = obj["reasoningContent"]["reasoningText"][
-                            "text"
-                        ]
+                        reasoning_text = obj["reasoningContent"]["reasoningText"]["text"]
                         yield f"\n\n🔧 Reasoning: {reasoning_text}\n\n"
             if "data" in event:
                 tool_name = None
@@ -123,7 +139,15 @@ async def strands_agent_bedrock(payload):
     except Exception as e:
         yield f"Error processing request: {str(e)}"
     finally:
-        client.close()
+        #client.close()
+        try:
+            client.close()
+        except AttributeError:
+            # MCPClient might not have close method in this version
+            pass
+        except Exception as e:
+            print(f"Warning: Error during client cleanup: {e}")
+        
 
 
 if __name__ == "__main__":

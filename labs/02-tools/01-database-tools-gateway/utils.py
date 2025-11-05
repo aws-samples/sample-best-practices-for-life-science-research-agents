@@ -5,6 +5,7 @@ import os
 from typing import Dict, Any
 
 
+
 def get_ssm_parameter(name: str, with_decryption: bool = True) -> str:
     ssm = boto3.client("ssm")
 
@@ -40,7 +41,7 @@ def delete_ssm_parameter(name: str) -> None:
 
 
 def load_api_spec(file_path: str) -> list:
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, "r") as f:
         data = json.load(f)
     if not isinstance(data, list):
         raise ValueError("Expected a list in the JSON file")
@@ -60,10 +61,13 @@ def get_aws_account_id() -> str:
 def get_cognito_client_secret() -> str:
     client = boto3.client("cognito-idp")
     response = client.describe_user_pool_client(
-        UserPoolId=get_ssm_parameter("/app/researchapp/agentcore/userpool_id"),
-        ClientId=get_ssm_parameter("/app/researchapp/agentcore/machine_client_id"),
+        UserPoolId=get_ssm_parameter("/deep-research-workshop/agentcore/userpool_id"),
+        ClientId=get_ssm_parameter("/deep-research-workshop/agentcore/machine_client_id"),
     )
     return response["UserPoolClient"]["ClientSecret"]
+
+
+
 
 
 def read_config(file_path: str) -> Dict[str, Any]:
