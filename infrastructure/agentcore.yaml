@@ -154,63 +154,6 @@ Resources:
                 Resource:
                   - "{{resolve:ssm:/deep-research-workshop/table-arn}}"
                   - "{{resolve:ssm:/deep-research-workshop/table-arn}}/*"
-        - PolicyName: AgentCoreGateway
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Sid: SSMGetparam
-                Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                Resource:
-                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/deep-research-workshop/*
-              - Sid: Identity
-                Effect: Allow
-                Action:
-                  - bedrock-agentcore:GetResourceOauth2Token
-                Resource:
-                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default/oauth2credentialprovider/researchapp*
-                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/researchapp*
-                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default
-                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default
-              - Sid: SecretManager
-                Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource:
-                  - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:bedrock-agentcore-identity!default/oauth2/researchapp*
-              - Sid: AgentCoreMemory
-                Effect: Allow
-                Action:
-                  - bedrock-agentcore:ListMemories
-                  - bedrock-agentcore:ListMemoryRecords
-                  - bedrock-agentcore:RetrieveMemoryRecords
-                  - bedrock-agentcore:GetMemory
-                  - bedrock-agentcore:GetMemoryRecord
-                  - bedrock-agentcore:CreateEvent
-                  - bedrock-agentcore:GetEvent
-                  - bedrock-agentcore:ListEvents
-                Resource:
-                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*
-              - Sid: BedrockKnowledgeBase
-                Effect: Allow
-                Action:
-                  - bedrock:GetKnowledgeBase
-                  - bedrock:GetKnowledgeBaseDocuments
-                  - bedrock:ListKnowledgeBases
-                  - bedrock:RetrieveAndGenerate
-                  - bedrock:Retrieve
-                Resource:
-                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
-              - Sid: CognitoIDP
-                Effect: Allow
-                Action:
-                  - cognito-idp:ListResourceServers
-                  - cognito-idp:DescribeResourceServer
-                  - cognito-idp:ListIdentityProviders
-                  - cognito-idp:ListUserPools
-                Resource:
-                  - !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
 
   AgentCoreRuntimeRoleArnParameter:
     Type: AWS::SSM::Parameter
@@ -350,6 +293,14 @@ Resources:
                   - cognito-idp:ListUserPools
                 Resource:
                   - !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+
+  AgentCoreRuntimeToolsRoleArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/agentcore-runtime-tools-role-arn
+      Description: ARN for AgentCore Runtime role for tools example
+      Type: String
+      Value: !GetAtt RuntimeAgentCoreRole.Arn
 
   GatewayAgentCoreRole:
     Type: AWS::IAM::Role
