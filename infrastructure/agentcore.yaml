@@ -32,7 +32,7 @@ Resources:
   # AgentCore
   #########################################################
 
-  AgentCoreRuntimeRole:
+  Module1AgentCoreRuntimeRole:
     Type: AWS::IAM::Role
     Metadata:
       cfn_nag:
@@ -155,17 +155,24 @@ Resources:
                   - "{{resolve:ssm:/deep-research-workshop/table-arn}}"
                   - "{{resolve:ssm:/deep-research-workshop/table-arn}}/*"
 
-  AgentCoreRuntimeRoleArnParameter:
+  Module1AgentCoreRuntimeRoleArnParameter:
     Type: AWS::SSM::Parameter
     Properties:
       Name: /deep-research-workshop/agentcore-runtime-role-arn
       Description: ARN for AgentCore Runtime role
       Type: String
-      Value: !GetAtt AgentCoreRuntimeRole.Arn
+      Value: !GetAtt Module1AgentCoreRuntimeRole.Arn
 
-  RuntimeAgentCoreRole:
+  Module2AgentCoreRuntimeRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub
+        - "AmazonBedrockAgentCore-Tools-${AWS::Region}-${StackIdSuffix}"
+        - StackIdSuffix:
+            !Select [
+              4,
+              !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]],
+            ]
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -294,13 +301,13 @@ Resources:
                 Resource:
                   - !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
 
-  AgentCoreRuntimeToolsRoleArnParameter:
+  Module2AgentCoreRuntimeRoleArnParameter:
     Type: AWS::SSM::Parameter
     Properties:
       Name: /deep-research-workshop/agentcore-runtime-tools-role-arn
       Description: ARN for AgentCore Runtime role for tools example
       Type: String
-      Value: !GetAtt RuntimeAgentCoreRole.Arn
+      Value: !GetAtt Module2AgentCoreRuntimeRole.Arn
 
   GatewayAgentCoreRole:
     Type: AWS::IAM::Role
@@ -470,9 +477,9 @@ Resources:
         - CredentialProviderType: "GATEWAY_IAM_ROLE"
 
 Outputs:
-  AgentCoreRuntimeRoleArn:
+  Module1AgentCoreRuntimeRoleArn:
     Description: ARN for AgentCore Runtime role
-    Value: !GetAtt AgentCoreRuntimeRole.Arn
+    Value: !GetAtt Module1AgentCoreRuntimeRole.Arn
 
   MemoryId:
     Description: "AgentCore Memory ID"
