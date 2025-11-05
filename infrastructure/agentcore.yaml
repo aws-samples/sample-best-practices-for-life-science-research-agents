@@ -154,6 +154,63 @@ Resources:
                 Resource:
                   - "{{resolve:ssm:/deep-research-workshop/table-arn}}"
                   - "{{resolve:ssm:/deep-research-workshop/table-arn}}/*"
+        - PolicyName: AgentCoreGateway
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: SSMGetparam
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/deep-research-workshop/*
+              - Sid: Identity
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:GetResourceOauth2Token
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default/oauth2credentialprovider/researchapp*
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/researchapp*
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default
+              - Sid: SecretManager
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:bedrock-agentcore-identity!default/oauth2/researchapp*
+              - Sid: AgentCoreMemory
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:ListMemories
+                  - bedrock-agentcore:ListMemoryRecords
+                  - bedrock-agentcore:RetrieveMemoryRecords
+                  - bedrock-agentcore:GetMemory
+                  - bedrock-agentcore:GetMemoryRecord
+                  - bedrock-agentcore:CreateEvent
+                  - bedrock-agentcore:GetEvent
+                  - bedrock-agentcore:ListEvents
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*
+              - Sid: BedrockKnowledgeBase
+                Effect: Allow
+                Action:
+                  - bedrock:GetKnowledgeBase
+                  - bedrock:GetKnowledgeBaseDocuments
+                  - bedrock:ListKnowledgeBases
+                  - bedrock:RetrieveAndGenerate
+                  - bedrock:Retrieve
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+              - Sid: CognitoIDP
+                Effect: Allow
+                Action:
+                  - cognito-idp:ListResourceServers
+                  - cognito-idp:DescribeResourceServer
+                  - cognito-idp:ListIdentityProviders
+                  - cognito-idp:ListUserPools
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
 
   AgentCoreRuntimeRoleArnParameter:
     Type: AWS::SSM::Parameter
@@ -186,24 +243,24 @@ Resources:
                   - ecr:BatchGetImage
                   - ecr:GetDownloadUrlForLayer
                 Resource:
-                  - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/bedrock-agentcore-researchapp*
+                  - !Sub arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/bedrock-agentcore-researchapp*
               - Effect: Allow
                 Action:
                   - logs:DescribeLogStreams
                   - logs:CreateLogGroup
                 Resource:
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*
               - Effect: Allow
                 Action:
                   - logs:DescribeLogGroups
                 Resource:
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*
+                  - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*
               - Sid: ECRTokenAccess
                 Effect: Allow
                 Action:
@@ -230,37 +287,37 @@ Resources:
                   - bedrock-agentcore:GetWorkloadAccessTokenForJWT
                   - bedrock-agentcore:GetWorkloadAccessTokenForUserId
                 Resource:
-                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default
-                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/researchapp*
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/researchapp*
               - Sid: ProvisionedThroughputModelInvocation
                 Effect: Allow
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
                 Resource:
-                  - "arn:aws:bedrock:*::foundation-model/*"
-                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:*
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
+                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:*
               - Sid: SSMGetparam
                 Effect: Allow
                 Action:
                   - ssm:GetParameter
                 Resource:
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/deep-research-workshop/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/deep-research-workshop/*
               - Sid: Identity
                 Effect: Allow
                 Action:
                   - bedrock-agentcore:GetResourceOauth2Token
                 Resource:
-                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default/oauth2credentialprovider/researchapp*
-                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/researchapp*
-                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default
-                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default/oauth2credentialprovider/researchapp*
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/researchapp*
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/default
               - Sid: SecretManager
                 Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource:
-                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:bedrock-agentcore-identity!default/oauth2/researchapp*
+                  - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:bedrock-agentcore-identity!default/oauth2/researchapp*
               - Sid: AgentCoreMemory
                 Effect: Allow
                 Action:
@@ -273,7 +330,7 @@ Resources:
                   - bedrock-agentcore:GetEvent
                   - bedrock-agentcore:ListEvents
                 Resource:
-                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*
               - Sid: BedrockKnowledgeBase
                 Effect: Allow
                 Action:
@@ -283,7 +340,7 @@ Resources:
                   - bedrock:RetrieveAndGenerate
                   - bedrock:Retrieve
                 Resource:
-                  - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
+                  - !Sub arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/*
               - Sid: CognitoIDP
                 Effect: Allow
                 Action:
@@ -292,7 +349,7 @@ Resources:
                   - cognito-idp:ListIdentityProviders
                   - cognito-idp:ListUserPools
                 Resource:
-                  - !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+                  - !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
 
   GatewayAgentCoreRole:
     Type: AWS::IAM::Role

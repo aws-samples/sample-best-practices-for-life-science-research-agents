@@ -324,6 +324,28 @@ Resources:
                 Resource:
                   - "{{resolve:ssm:/deep-research-workshop/table-arn}}"
                   - "{{resolve:ssm:/deep-research-workshop/table-arn}}/*"
+              - Sid: CognitoIDP
+                Effect: Allow
+                Action:
+                  - cognito-idp:ListResourceServers
+                  - cognito-idp:DescribeResourceServer
+                  - cognito-idp:ListIdentityProviders
+                  - cognito-idp:ListUserPools
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*          
+              - Sid: AgentCoreMemory
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:ListMemories
+                  - bedrock-agentcore:ListMemoryRecords
+                  - bedrock-agentcore:RetrieveMemoryRecords
+                  - bedrock-agentcore:GetMemory
+                  - bedrock-agentcore:GetMemoryRecord
+                  - bedrock-agentcore:CreateEvent
+                  - bedrock-agentcore:GetEvent
+                  - bedrock-agentcore:ListEvents
+                Resource:
+                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*                  
 
   StudioDomain:
     Type: AWS::SageMaker::Domain

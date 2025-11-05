@@ -1,0 +1,8 @@
+mcp>=1.10.0
+boto3
+bedrock-agentcore
+bedrock-agentcore-starter-toolkit>=0.1.21
+strands-agents
+defusedxml>=0.7.1
+httpx>=0.28.1
+httpx-sse>=0.4.0
