@@ -441,6 +441,16 @@ Resources:
       Tags:
         Application: ResearchApp
 
+  GatewayIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/agentcore/gateway_id
+      Type: String
+      Value: !Ref AgentCoreGateway
+      Description: AgentCore Gateway URL
+      Tags:
+        Application: ResearchApp        
+
   AgentCoreGateway:
     Type: AWS::BedrockAgentCore::Gateway
     Properties:

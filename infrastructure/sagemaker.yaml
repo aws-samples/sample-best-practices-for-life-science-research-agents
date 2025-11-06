@@ -218,18 +218,24 @@ Resources:
                 Action:
                   - bedrock-agentcore:CreateAgentRuntime
                   - bedrock-agentcore:CreateAgentRuntimeEndpoint
+                  - bedrock-agentcore:CreateGatewayTarget
                   - bedrock-agentcore:CreateWorkloadIdentity
                   - bedrock-agentcore:DeleteAgentRuntime
                   - bedrock-agentcore:DeleteAgentRuntimeEndpoint
+                  - bedrock-agentcore:DeleteGatewayTarget
                   - bedrock-agentcore:DeleteWorkloadIdentity
                   - bedrock-agentcore:GetAgentRuntime
                   - bedrock-agentcore:GetAgentRuntimeEndpoint
+                  - bedrock-agentcore:GetGatewayTarget
                   - bedrock-agentcore:GetWorkloadIdentity
                   - bedrock-agentcore:ListAgentRuntimes
+                  - bedrock-agentcore:ListGatewayTargets
                   - bedrock-agentcore:UpdateAgentRuntime
                   - bedrock-agentcore:UpdateAgentRuntimeEndpoint
+                  - bedrock-agentcore:UpdateGatewayTarget
                   - bedrock-agentcore:UpdateWorkloadIdentity
                   - bedrock-agentcore:InvokeAgentRuntime
+                  - bedrock-agentcore:SynchronizeGatewayTargets
                 Resource: "*"
               - Sid: IAMPassRoleAccess
                 Effect: Allow
@@ -332,7 +338,7 @@ Resources:
                   - cognito-idp:ListIdentityProviders
                   - cognito-idp:ListUserPools
                 Resource:
-                  - !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*          
+                  - !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
               - Sid: AgentCoreMemory
                 Effect: Allow
                 Action:
@@ -345,7 +351,19 @@ Resources:
                   - bedrock-agentcore:GetEvent
                   - bedrock-agentcore:ListEvents
                 Resource:
-                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*                  
+                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*
+              - Sid: AgentCoreIdentity
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:CreateOauth2CredentialProvider
+                  - bedrock-agentcore:CreateTokenVault
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/*
+              - Sid: Secrets
+                Effect: Allow
+                Action:
+                  - secretsmanager:CreateSecret
+                Resource: "*"
 
   StudioDomain:
     Type: AWS::SageMaker::Domain
