@@ -31,6 +31,7 @@ app = BedrockAgentCoreApp()
 
 model = BedrockModel(
     model_id=MODEL_ID,
+    cache_tools="default",
 )
 pmc_research_agent = Agent(
     model=model,

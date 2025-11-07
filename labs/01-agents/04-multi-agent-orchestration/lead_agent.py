@@ -4,6 +4,8 @@ import os
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
 from strands.models import BedrockModel
+from strands.types.content import SystemContentBlock
+
 from strands_tools import editor
 
 from generate_report import generate_report_tool
@@ -29,10 +31,15 @@ def research_agent(prompt: str) -> str:
 
 app = BedrockAgentCoreApp()
 
+# Define system content with cache points
+system_content = [
+    SystemContentBlock(text=SYSTEM_PROMPT),
+    SystemContentBlock(cachePoint={"type": "default"}),
+]
+
 model = BedrockModel(
     model_id=MODEL_ID,
     max_tokens=10000,
-    cache_prompt="default",
     cache_tools="default",
     temperature=1,
     additional_request_fields={
@@ -49,7 +56,7 @@ os.environ["BYPASS_TOOL_CONSENT"] = "true"
 agent = Agent(
     model=model,
     tools=[research_agent, generate_report_tool, editor],
-    system_prompt=SYSTEM_PROMPT,
+    system_prompt=system_content,
 )
 
 
