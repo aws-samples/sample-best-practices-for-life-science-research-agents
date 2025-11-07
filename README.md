@@ -15,36 +15,17 @@ cd sample-best-practices-for-life-science-research-agents
 pip install .
 ```
 
-This installs all dependencies including the interactive chat CLI.
-
-### Using the Chat CLI
-
-After completing the notebooks and deploying your agent to AgentCore, you can interact with it using the chat CLI:
-
-```bash
-agentcore-chat
-```
-
-The CLI will:
-
-1. Automatically discover your deployed agents
-2. Let you select which agent to chat with
-3. Start an interactive chat session
-
-Type `exit` to quit the chat session.
+This installs all dependencies.
 
 ## What's Included
 
 - All required Python packages (strands-agents, boto3, etc.)
-- The `agentcore-chat` CLI tool for interactive agent testing
 - Hands-on workshop notebooks and examples
 
 ## Project Structure
 
 ```bash
 sample-best-practices-for-life-science-research-agents/
-├── src/
-│   └── workshop_tools/          # Chat CLI code
 ├── labs/                        # Example notebooks
 └── pyproject.toml               # Project configuration
 ```
