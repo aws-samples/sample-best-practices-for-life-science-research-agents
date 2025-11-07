@@ -18,6 +18,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Create non-root user and set ownership
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
 # Verify required files exist
 RUN ls -la && \
     test -f app.py && echo "✓ app.py found" || (echo "✗ app.py not found" && exit 1)
