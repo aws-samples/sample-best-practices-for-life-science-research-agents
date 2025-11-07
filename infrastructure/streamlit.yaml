@@ -29,17 +29,18 @@ Parameters:
   GitRepoURL:
     Type: String
     Description: Git repository URL for the Streamlit application
-    Default: 'https://github.com/aws-samples/amazon-bedrock-agents-healthcare-lifesciences.git'
+    Default: 'https://github.com/aws-samples/sample-best-practices-for-life-science-research-agents'
 
   GitBranch:
     Type: String
     Description: Git branch to build from
-    Default: 'hosted-streamlit'
+    Default: 'main'
 
   BuildDockerfile:
     Type: String
     Description: Path to Dockerfile in the repository
-    Default: 'agents_catalog/28-Research-agent-biomni-gateway-tools/Dockerfile.streamlit.txt'
+    # Default: 'agents_catalog/28-Research-agent-biomni-gateway-tools/Dockerfile.streamlit.txt'
+    Default: 'infrastructure/app/Dockerfile'
 
   # Existing Cognito SSM Parameters
   CognitoUserPoolIdParameter:
@@ -722,10 +723,7 @@ Resources:
                 - echo "Current directory:" && pwd
                 - echo "Listing files:"
                 - ls -la
-                - echo "Renaming Dockerfile.streamlit.txt to Dockerfile.streamlit"
-                - mv Dockerfile.streamlit.txt Dockerfile.streamlit
-                - echo "Building Docker image..."
-                - docker build -f Dockerfile.streamlit -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+                - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
                 - echo "Tagging Docker image..."
                 - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
                 - echo "Docker image tagged"

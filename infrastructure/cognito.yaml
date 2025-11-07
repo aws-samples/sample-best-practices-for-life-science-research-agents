@@ -31,7 +31,7 @@ Resources:
     Type: AWS::Cognito::UserPool
     Properties:
       AdminCreateUserConfig:
-        AllowAdminCreateUserOnly: true
+        AllowAdminCreateUserOnly: false
       UserPoolName: !Ref UserPoolName
       MfaConfiguration: "OPTIONAL"
       EnabledMfas:
