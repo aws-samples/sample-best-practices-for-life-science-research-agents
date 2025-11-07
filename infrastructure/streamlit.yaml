@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Streamlit Application with ECS Fargate, ALB, and Existing Cognito Integration
   Addresses: No CloudFront exposure, Cognito auth, uses existing User Pool
@@ -13,34 +13,33 @@ Parameters:
   ApplicationLoadBalancerSSLCertificate:
     Type: String
     Description: ARN of ACM certificate for HTTPS (leave blank for self-signed dev cert)
-    Default: ''
+    Default: ""
 
   ApplicationLoadBalancerCIDRWhitelist:
     Type: String
     Description: CIDR IP range allowed to access the application
-    Default: '0.0.0.0/0'
+    Default: "0.0.0.0/0"
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
 
   ContainerImage:
     Type: String
     Description: Docker image URI for Streamlit (leave blank to auto-build from source)
-    Default: ''
+    Default: ""
 
-  GitRepoURL:
+  GitHubRepository:
     Type: String
     Description: Git repository URL for the Streamlit application
-    Default: 'https://github.com/aws-samples/sample-best-practices-for-life-science-research-agents'
+    Default: "https://github.com/aws-samples/sample-best-practices-for-life-science-research-agents"
 
-  GitBranch:
+  GitHubBranch:
     Type: String
     Description: Git branch to build from
-    Default: 'main'
+    Default: "main"
 
   BuildDockerfile:
     Type: String
     Description: Path to Dockerfile in the repository
-    # Default: 'agents_catalog/28-Research-agent-biomni-gateway-tools/Dockerfile.streamlit.txt'
-    Default: 'infrastructure/app/Dockerfile'
+    Default: "infrastructure/app/Dockerfile"
 
   # Existing Cognito SSM Parameters
   CognitoUserPoolIdParameter:
@@ -54,8 +53,9 @@ Parameters:
     Default: /deep-research-workshop/agentcore/cognito_domain
 
 Conditions:
-  UseSelfSignedSSLCertificate: !Equals [!Ref ApplicationLoadBalancerSSLCertificate, '']
-  HasContainerImage: !Not [!Equals [!Ref ContainerImage, '']]
+  UseSelfSignedSSLCertificate:
+    !Equals [!Ref ApplicationLoadBalancerSSLCertificate, ""]
+  HasContainerImage: !Not [!Equals [!Ref ContainerImage, ""]]
 
 Resources:
   # Lambda to read SSM parameters
@@ -69,7 +69,7 @@ Resources:
   GetCognitoConfigLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ResourceName}-get-cognito-config'
+      FunctionName: !Sub "${ResourceName}-get-cognito-config"
       Handler: index.handler
       Role: !GetAtt GetCognitoConfigLambdaRole.Arn
       Runtime: python3.12
@@ -78,7 +78,7 @@ Resources:
         ZipFile: |
           import boto3
           import cfnresponse
-          
+
           def handler(event, context):
               try:
                   if event['RequestType'] in ['Create', 'Update']:
@@ -116,7 +116,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -127,64 +127,62 @@ Resources:
       Policies:
         - PolicyName: SSMAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
                   - ssm:GetParameters
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/deep-research-workshop/*'
+                  - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/deep-research-workshop/*"
         - PolicyName: CognitoAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - cognito-idp:DescribeUserPool
-                Resource: '*'
-
-  
+                Resource: "*"
 
   # VPC and Networking
   Vpc:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: '10.0.0.0/16'
+      CidrBlock: "10.0.0.0/16"
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub '${ResourceName}-vpc'
+          Value: !Sub "${ResourceName}-vpc"
 
   PublicSubnetAz1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: '10.0.0.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: "10.0.0.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${ResourceName}-public-subnet-az1'
+          Value: !Sub "${ResourceName}-public-subnet-az1"
 
   PublicSubnetAz2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${ResourceName}-public-subnet-az2'
+          Value: !Sub "${ResourceName}-public-subnet-az2"
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${ResourceName}-igw'
+          Value: !Sub "${ResourceName}-igw"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -198,14 +196,14 @@ Resources:
       VpcId: !Ref Vpc
       Tags:
         - Key: Name
-          Value: !Sub '${ResourceName}-route-table'
+          Value: !Sub "${ResourceName}-route-table"
 
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref RouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
+      DestinationCidrBlock: "0.0.0.0/0"
       GatewayId: !Ref InternetGateway
 
   SubnetRouteTableAssociation1:
@@ -242,10 +240,10 @@ Resources:
           IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: '0.0.0.0/0'
+          CidrIp: "0.0.0.0/0"
       Tags:
         - Key: Name
-          Value: !Sub '${ResourceName}-alb-sg'
+          Value: !Sub "${ResourceName}-alb-sg"
 
   AlbToEcsSecurityGroupRule:
     Type: AWS::EC2::SecurityGroupEgress
@@ -273,16 +271,16 @@ Resources:
           IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: '0.0.0.0/0'
+          CidrIp: "0.0.0.0/0"
       Tags:
         - Key: Name
-          Value: !Sub '${ResourceName}-ecs-sg'
+          Value: !Sub "${ResourceName}-ecs-sg"
 
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${ResourceName}-alb'
+      Name: !Sub "${ResourceName}-alb"
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -292,12 +290,12 @@ Resources:
         - !Ref PublicSubnetAz2
       Tags:
         - Key: Name
-          Value: !Sub '${ResourceName}-alb'
+          Value: !Sub "${ResourceName}-alb"
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${ResourceName}-tg'
+      Name: !Sub "${ResourceName}-tg"
       VpcId: !Ref Vpc
       Port: 8501
       Protocol: HTTP
@@ -311,13 +309,13 @@ Resources:
       UnhealthyThresholdCount: 3
       Tags:
         - Key: Name
-          Value: !Sub '${ResourceName}-tg'
+          Value: !Sub "${ResourceName}-tg"
 
   # Cognito User Pool Client for ALB
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Sub '${ResourceName}-alb-client'
+      ClientName: !Sub "${ResourceName}-alb-client"
       UserPoolId: !GetAtt GetCognitoConfig.UserPoolId
       GenerateSecret: true
       AllowedOAuthFlowsUserPoolClient: true
@@ -342,12 +340,12 @@ Resources:
     Properties:
       ServiceToken: !GetAtt StringFunctionsLambda.Arn
       Function: lower
-      InputString: !Sub 'https://${ApplicationLoadBalancer.DNSName}/oauth2/idpresponse'
+      InputString: !Sub "https://${ApplicationLoadBalancer.DNSName}/oauth2/idpresponse"
 
   StringFunctionsLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ResourceName}-string-functions'
+      FunctionName: !Sub "${ResourceName}-string-functions"
       Handler: index.handler
       Role: !GetAtt StringFunctionsLambdaRole.Arn
       Runtime: python3.12
@@ -355,7 +353,7 @@ Resources:
       Code:
         ZipFile: |
           import cfnresponse
-          
+
           def handler(event, context):
               try:
                   if event['RequestType'] in ['Create', 'Update']:
@@ -377,7 +375,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -397,7 +395,7 @@ Resources:
     Type: AWS::Lambda::Function
     Condition: UseSelfSignedSSLCertificate
     Properties:
-      FunctionName: !Sub '${ResourceName}-create-cert'
+      FunctionName: !Sub "${ResourceName}-create-cert"
       Handler: index.handler
       Role: !GetAtt CreateCertificateLambdaRole.Arn
       Runtime: python3.12
@@ -411,7 +409,7 @@ Resources:
           import sys
           import tempfile
           from pathlib import Path
-          
+
           def handler(event, context):
               try:
                   if event['RequestType'] == 'Create':
@@ -492,7 +490,7 @@ Resources:
     Condition: UseSelfSignedSSLCertificate
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -503,13 +501,13 @@ Resources:
       Policies:
         - PolicyName: ACMAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - acm:ImportCertificate
                   - acm:DeleteCertificate
-                Resource: '*'
+                Resource: "*"
 
   # ALB Listeners
   HttpsListener:
@@ -545,14 +543,14 @@ Resources:
         - Type: redirect
           RedirectConfig:
             Protocol: HTTPS
-            Port: '443'
+            Port: "443"
             StatusCode: HTTP_301
 
   # ECS Resources
   EcsCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub '${ResourceName}-cluster'
+      ClusterName: !Sub "${ResourceName}-cluster"
       ClusterSettings:
         - Name: containerInsights
           Value: enabled
@@ -561,7 +559,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -574,7 +572,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -583,7 +581,7 @@ Resources:
       Policies:
         - PolicyName: BedrockAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -593,22 +591,22 @@ Resources:
                   - bedrock-agentcore:ListAgentRuntimes
                   - bedrock-agentcore:ListAgentRuntimeVersions
                   - bedrock-agentcore:GetAgentRuntime
-                Resource: '*'
+                Resource: "*"
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
                   - ssm:GetParameters
-                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*'
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*"
 
   EcsTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub '${ResourceName}-task'
+      Family: !Sub "${ResourceName}-task"
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: '1024'
-      Memory: '2048'
+      Cpu: "1024"
+      Memory: "2048"
       ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt EcsTaskRole.Arn
       ContainerDefinitions:
@@ -616,7 +614,7 @@ Resources:
           Image: !If
             - HasContainerImage
             - !Ref ContainerImage
-            - !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest'
+            - !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest"
           PortMappings:
             - ContainerPort: 8501
               Protocol: tcp
@@ -630,19 +628,21 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: REDIRECT_URI
-              Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}/'
+              Value: !Sub "https://${ApplicationLoadBalancer.DNSName}/"
 
   EcsLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/ecs/${ResourceName}'
+      LogGroupName: !Sub "/ecs/${ResourceName}"
       RetentionInDays: 7
 
   EcsService:
     Type: AWS::ECS::Service
     DependsOn: HttpsListener
     Properties:
-      ServiceName: !Sub '${ResourceName}-service'
+      ServiceName: !Sub "${ResourceName}-service"
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref EcsTaskDefinition
       DesiredCount: 0
@@ -673,7 +673,7 @@ Resources:
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub '${ResourceName}-build'
+      Name: !Sub "${ResourceName}-build"
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Artifacts:
         Type: NO_ARTIFACTS
@@ -693,22 +693,16 @@ Resources:
             Value: latest
           - Name: DOCKERFILE_PATH
             Value: !Ref BuildDockerfile
-          - Name: GIT_BRANCH
-            Value: !Ref GitBranch
-          - Name: GIT_REPO_URL
-            Value: !Ref GitRepoURL
       Source:
-        Type: NO_SOURCE
+        Type: GITHUB
+        Location: !Ref GitHubRepository
+        GitCloneDepth: 1
         BuildSpec: |
           version: 0.2
           phases:
             pre_build:
               commands:
                 - echo "Starting pre_build phase"
-                - echo "Cloning Git repository from branch $GIT_BRANCH..."
-                - GIT_LFS_SKIP_SMUDGE=1 git clone -b $GIT_BRANCH --single-branch $GIT_REPO_URL repo
-                - cd repo
-                - echo "Current directory:" && pwd
                 - echo "Logging into Amazon ECR..."
                 - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
                 - echo "ECR login complete"
@@ -734,6 +728,7 @@ Resources:
                 - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
                 - echo "Docker image pushed to ECR"
                 - echo "Build completed on $(date)"
+      SourceVersion: !Ref GitHubBranch
       LogsConfig:
         CloudWatchLogs:
           Status: ENABLED
@@ -742,15 +737,17 @@ Resources:
 
   CodeBuildLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/codebuild/${ResourceName}'
+      LogGroupName: !Sub "/aws/codebuild/${ResourceName}"
       RetentionInDays: 7
 
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -759,7 +756,7 @@ Resources:
       Policies:
         - PolicyName: CodeBuildPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -767,12 +764,12 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CodeBuildLogGroup}'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CodeBuildLogGroup}:*'
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CodeBuildLogGroup}"
+                  - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CodeBuildLogGroup}:*"
               - Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
-                Resource: '*'
+                Resource: "*"
               - Effect: Allow
                 Action:
                   - ecr:BatchCheckLayerAvailability
@@ -788,7 +785,7 @@ Resources:
   TriggerBuildLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ResourceName}-trigger-build'
+      FunctionName: !Sub "${ResourceName}-trigger-build"
       Handler: index.handler
       Role: !GetAtt TriggerBuildLambdaRole.Arn
       Runtime: python3.12
@@ -798,7 +795,7 @@ Resources:
           import boto3
           import cfnresponse
           import time
-          
+
           def handler(event, context):
               try:
                   if event['RequestType'] in ['Create', 'Update']:
@@ -855,7 +852,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -866,7 +863,7 @@ Resources:
       Policies:
         - PolicyName: CodeBuildAccess
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -876,15 +873,13 @@ Resources:
               - Effect: Allow
                 Action:
                   - ecs:UpdateService
-                Resource: !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${EcsCluster}/${EcsService.Name}'
+                Resource: !Sub "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/${EcsCluster}/${EcsService.Name}"
 
   # Trigger build on stack creation
   TriggerBuild:
     Type: Custom::TriggerBuild
     DependsOn:
-      - CodeBuildProject
       - ECRRepository
-      - EcsService
     Properties:
       ServiceToken: !GetAtt TriggerBuildLambda.Arn
       ProjectName: !Ref CodeBuildProject
@@ -894,48 +889,48 @@ Resources:
 Outputs:
   ApplicationURL:
     Description: URL to access the Streamlit application
-    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+    Value: !Sub "https://${ApplicationLoadBalancer.DNSName}"
 
-  LoadBalancerDNS:
-    Description: DNS name of the Application Load Balancer
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
+  # LoadBalancerDNS:
+  #   Description: DNS name of the Application Load Balancer
+  #   Value: !GetAtt ApplicationLoadBalancer.DNSName
 
-  CognitoUserPoolId:
-    Description: Cognito User Pool ID (existing)
-    Value: !GetAtt GetCognitoConfig.UserPoolId
+  # CognitoUserPoolId:
+  #   Description: Cognito User Pool ID (existing)
+  #   Value: !GetAtt GetCognitoConfig.UserPoolId
 
-  CognitoUserPoolClientId:
-    Description: Cognito User Pool Client ID (ALB-specific)
-    Value: !Ref CognitoUserPoolClient
+  # CognitoUserPoolClientId:
+  #   Description: Cognito User Pool Client ID (ALB-specific)
+  #   Value: !Ref CognitoUserPoolClient
 
-  CognitoDomain:
-    Description: Cognito Domain (existing)
-    Value: !GetAtt GetCognitoConfig.FullDomain
+  # CognitoDomain:
+  #   Description: Cognito Domain (existing)
+  #   Value: !GetAtt GetCognitoConfig.FullDomain
 
-  CognitoUsersConsoleURL:
-    Description: URL to manage Cognito users
-    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cognito/v2/idp/user-pools/${GetCognitoConfig.UserPoolId}/users'
+  # CognitoUsersConsoleURL:
+  #   Description: URL to manage Cognito users
+  #   Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cognito/v2/idp/user-pools/${GetCognitoConfig.UserPoolId}/users"
 
-  EcsClusterName:
-    Description: ECS Cluster Name
-    Value: !Ref EcsCluster
+  # EcsClusterName:
+  #   Description: ECS Cluster Name
+  #   Value: !Ref EcsCluster
 
-  EcsServiceName:
-    Description: ECS Service Name
-    Value: !GetAtt EcsService.Name
+  # EcsServiceName:
+  #   Description: ECS Service Name
+  #   Value: !GetAtt EcsService.Name
 
-  SecurityNote:
-    Description: Security improvements over CloudFront approach
-    Value: 'No CloudFront exposure - Cognito authentication required at ALB - HTTPS only'
+  # SecurityNote:
+  #   Description: Security improvements over CloudFront approach
+  #   Value: "No CloudFront exposure - Cognito authentication required at ALB - HTTPS only"
 
-  ECRRepositoryURI:
-    Description: ECR Repository URI
-    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}'
+  # ECRRepositoryURI:
+  #   Description: ECR Repository URI
+  #   Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}"
 
-  CodeBuildProjectName:
-    Description: CodeBuild project name for rebuilding the image
-    Value: !Ref CodeBuildProject
+  # CodeBuildProjectName:
+  #   Description: CodeBuild project name for rebuilding the image
+  #   Value: !Ref CodeBuildProject
 
-  CodeBuildConsoleURL:
-    Description: URL to view CodeBuild project
-    Value: !Sub 'https://console.aws.amazon.com/codesuite/codebuild/projects/${CodeBuildProject}?region=${AWS::Region}'
+  # CodeBuildConsoleURL:
+  #   Description: URL to view CodeBuild project
+  #   Value: !Sub "https://console.aws.amazon.com/codesuite/codebuild/projects/${CodeBuildProject}?region=${AWS::Region}"

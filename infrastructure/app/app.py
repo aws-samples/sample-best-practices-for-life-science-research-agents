@@ -8,7 +8,6 @@ import boto3
 import streamlit as st
 from streamlit.logger import get_logger
 
-
 logger = get_logger(__name__)
 logger.setLevel("INFO")
 
@@ -35,7 +34,7 @@ HUMAN_AVATAR = "static/user-profile.svg"
 AI_AVATAR = "static/gen-ai-dark.svg"
 
 
-def fetch_agent_runtimes(region: str = "us-east-1") -> List[Dict]:
+def fetch_agent_runtimes(region: str = "us-west-2") -> List[Dict]:
     """Fetch available agent runtimes from bedrock-agentcore-control"""
     try:
         client = boto3.client("bedrock-agentcore-control", region_name=region)
@@ -58,7 +57,7 @@ def fetch_agent_runtimes(region: str = "us-east-1") -> List[Dict]:
 
 
 def fetch_agent_runtime_versions(
-    agent_runtime_id: str, region: str = "us-east-1"
+    agent_runtime_id: str, region: str = "us-west-2"
 ) -> List[Dict]:
     """Fetch versions for a specific agent runtime"""
     try:
@@ -246,7 +245,7 @@ def invoke_agent_streaming(
     prompt: str,
     agent_arn: str,
     runtime_session_id: str,
-    region: str = "us-east-1",
+    region: str = "us-west-2",
     show_tool: bool = True,
 ) -> Iterator[str]:
     """Invoke agent and yield streaming response chunks"""
@@ -276,10 +275,6 @@ def invoke_agent_streaming(
                         parsed_chunk = parse_streaming_chunk(line)
                         if parsed_chunk.strip():  # Only yield non-empty chunks
                             if "🔧 Using tool:" in parsed_chunk and not show_tool:
-                                yield ""
-                            elif "🔧 Tool input:" in parsed_chunk and not show_tool:
-                                yield ""
-                            elif "🔧 Tool result:" in parsed_chunk and not show_tool:
                                 yield ""
                             else:
                                 yield parsed_chunk
@@ -374,7 +369,8 @@ def main():
         # Region selection (moved up since it affects agent fetching)
         region = st.selectbox(
             "AWS Region",
-            ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
+            # ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
+            ["us-west-2"],
             index=0,
         )
 
@@ -429,12 +425,9 @@ def main():
                         # Format version display with update time
                         version_display = f"v{version_num}"
                         if updated:
-                            try:
-                                if hasattr(updated, "strftime"):
-                                    updated_str = updated.strftime("%m/%d %H:%M")
-                                    version_display += f" ({updated_str})"
-                            except:
-                                pass
+                            if hasattr(updated, "strftime"):
+                                updated_str = updated.strftime("%m/%d %H:%M")
+                                version_display += f" ({updated_str})"
 
                         version_options.append(version_display)
                         version_arn_map[version_display] = {
@@ -601,7 +594,7 @@ def main():
                         else:
                             # Show raw response
                             message_placeholder.markdown(chunk_buffer + " ▌")
-                    # nosemgrep sleep to wait for resources
+                    # nosemgrep arbitrary-sleep
                     time.sleep(0.01)  # Reduced delay since we're batching updates
 
                 # Final response without cursor
