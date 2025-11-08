@@ -1,4 +1,8 @@
 Parameters:
+  DynamoDbTableName:
+    Type: String
+    Description: Table name for the DynamoDb instance used to store evidence
+    Default: "deep-research-evidence"
   UserProfileName:
     Type: String
     Description: The user profile name for the SageMaker workshop
@@ -13,6 +17,55 @@ Parameters:
     Default: "https://github.com/aws-samples/sample-best-practices-for-life-science-research-agents"
 
 Resources:
+  ResearchEvidenceTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Explicit table name required for workshop consistency and agent configuration"
+    Properties:
+      TableName: !Ref DynamoDbTableName
+      AttributeDefinitions:
+        - AttributeName: evidence_id
+          AttributeType: S
+        - AttributeName: source
+          AttributeType: S
+      KeySchema:
+        - AttributeName: evidence_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: source_index
+          KeySchema:
+            - AttributeName: source
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  DynamoDBTableNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/table-name
+      Description: DynamoDB table name for deep research workshop
+      Type: String
+      Value: !Ref ResearchEvidenceTable
+
+  DynamoDBTableArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/table-arn
+      Description: DynamoDB table ARN for deep research workshop
+      Type: String
+      Value: !GetAtt ResearchEvidenceTable.Arn
+
   StudioBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
@@ -328,8 +381,8 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:Query
                 Resource:
-                  - "{{resolve:ssm:/deep-research-workshop/table-arn}}"
-                  - "{{resolve:ssm:/deep-research-workshop/table-arn}}/*"
+                  - !GetAtt ResearchEvidenceTable.Arn
+                  - !Sub "${ResearchEvidenceTable.Arn}/*"
               - Sid: CognitoIDP
                 Effect: Allow
                 Action:
@@ -903,3 +956,9 @@ Outputs:
   S3BucketName:
     Description: Amazon S3 bucket name for deep research workshop
     Value: !Ref StudioBucket
+  DynamoDBTableName:
+    Description: DynamoDB table name for deep research workshop
+    Value: !Ref ResearchEvidenceTable
+  DynamoDBTableArn:
+    Description: DynamoDB table ARN for deep research workshop
+    Value: !GetAtt ResearchEvidenceTable.Arn
