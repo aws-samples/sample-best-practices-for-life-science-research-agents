@@ -46,13 +46,14 @@ app = BedrockAgentCoreApp()
 
 
 @app.entrypoint
-async def strands_agent_bedrock(payload):
+async def strands_agent_bedrock(payload, context):
     
     """Create and run agent for each invocation"""
 
     # Create model
     model = BedrockModel(
         model_id="global.anthropic.claude-sonnet-4-20250514-v1:0",
+        max_tokens=10000,
         additional_request_fields={
             "anthropic_beta": ["interleaved-thinking-2025-05-14"],
             "thinking": {"type": "enabled", "budget_tokens": 8000},
@@ -78,10 +79,14 @@ async def strands_agent_bedrock(payload):
     mem_arn = get_ssm_parameter("/deep-research-workshop/agentcore/memory_id")
     mem_id = mem_arn.split("/")[-1]
 
+    print(f"Received event: {payload}")
+
     user_input = payload.get("prompt")
     actor_id = payload.get("actor_id", "DEFAULT")
-    session_id = payload.get("session_id", "DEFAULT")
-
+    session_id = context.session_id
+    print(f"actor id: {actor_id}")
+    print(f"session id: {session_id}")
+    print(f"mem id: {mem_id}")
     if not session_id:
         raise Exception("Context session_id is not set")
     
@@ -113,7 +118,7 @@ async def strands_agent_bedrock(payload):
     print(f"Top tool: {tools_found[0]['name']}")
                 
     agent_tools = tools_to_strands_mcp_tools(tools_found, MAX_TOOLS, client)
-    agent = Agent(system_prompt=SYSTEM_PROMPT,model=model, tools=agent_tools, session_manager=session_manager, agent_id=str(uuid.uuid4()))
+    agent = Agent(system_prompt=SYSTEM_PROMPT,model=model, tools=agent_tools, session_manager=session_manager)
 
     print("User input:", user_input)
     # Stream response
