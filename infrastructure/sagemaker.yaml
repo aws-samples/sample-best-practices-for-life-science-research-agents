@@ -1,4 +1,8 @@
 Parameters:
+  DynamoDbTableName:
+    Type: String
+    Description: Table name for the DynamoDb instance used to store evidence
+    Default: "deep-research-evidence"
   UserProfileName:
     Type: String
     Description: The user profile name for the SageMaker workshop
@@ -11,8 +15,69 @@ Parameters:
     Type: String
     Description: The URL of a code repository to suggest in the Studio Git window
     Default: "https://github.com/aws-samples/sample-best-practices-for-life-science-research-agents"
+  CodeBuildProjectName:
+    Type: String
+    Default: "workshop-content-builder"
+    Description: "Name of the CodeBuild project"
+  CodeBuildGitHubRepository:
+    Type: String
+    Default: "https://github.com/aws-samples/sample-best-practices-for-life-science-research-agents.git"
+    Description: "GitHub repository URL"
+  CodeBuildGitHubBranch:
+    Type: String
+    Default: "main"
+    Description: "GitHub branch to build from"
 
 Resources:
+  ResearchEvidenceTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Explicit table name required for workshop consistency and agent configuration"
+    Properties:
+      TableName: !Ref DynamoDbTableName
+      AttributeDefinitions:
+        - AttributeName: evidence_id
+          AttributeType: S
+        - AttributeName: source
+          AttributeType: S
+      KeySchema:
+        - AttributeName: evidence_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: source_index
+          KeySchema:
+            - AttributeName: source
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  DynamoDBTableNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/table-name
+      Description: DynamoDB table name for deep research workshop
+      Type: String
+      Value: !Ref ResearchEvidenceTable
+
+  DynamoDBTableArnParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /deep-research-workshop/table-arn
+      Description: DynamoDB table ARN for deep research workshop
+      Type: String
+      Value: !GetAtt ResearchEvidenceTable.Arn
+
   StudioBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
@@ -328,8 +393,8 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:Query
                 Resource:
-                  - "{{resolve:ssm:/deep-research-workshop/table-arn}}"
-                  - "{{resolve:ssm:/deep-research-workshop/table-arn}}/*"
+                  - !GetAtt ResearchEvidenceTable.Arn
+                  - !Sub "${ResearchEvidenceTable.Arn}/*"
               - Sid: CognitoIDP
                 Effect: Allow
                 Action:
@@ -351,12 +416,11 @@ Resources:
                   - bedrock-agentcore:GetEvent
                   - bedrock-agentcore:ListEvents
                 Resource:
-                  - !Sub arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/researchapp*
               - Sid: AgentCoreIdentity
                 Effect: Allow
                 Action:
                   - bedrock-agentcore:CreateOauth2CredentialProvider
-                  - bedrock-agentcore:CreateTokenVault
                 Resource:
                   - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:token-vault/*
               - Sid: Secrets
@@ -896,6 +960,197 @@ Resources:
       Runtime: python3.13
       Timeout: 5
 
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: CodeBuildServicePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: S3BucketAccess
+                Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${StudioBucket}"
+              - Sid: S3ObjectAccess
+                Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${StudioBucket}/build/*"
+              - Sid: CloudWatchLogsAccess
+                Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${CodeBuildProjectName}*"
+              - Sid: SSMParameterAccess
+                Effect: Allow
+                Action:
+                  - "ssm:GetParameter"
+                  - "ssm:GetParameters"
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/deep-research-workshop/*"
+
+  TriggerBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: TriggerCodeBuildPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codebuild:StartBuild"
+                  - "codebuild:BatchGetBuilds"
+                Resource: !GetAtt CodeBuildProject.Arn
+
+  TriggerBuildFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt TriggerBuildRole.Arn
+      Timeout: 900
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+          import time
+
+          codebuild = boto3.client('codebuild')
+
+          def handler(event, context):
+              print(f"Event: {json.dumps(event)}")
+              
+              try:
+                  request_type = event['RequestType']
+                  project_name = event['ResourceProperties']['ProjectName']
+                  
+                  if request_type == 'Create':
+                      print(f"Starting build for project: {project_name}")
+                      response = codebuild.start_build(projectName=project_name)
+                      build_id = response['build']['id']
+                      print(f"Build started: {build_id}")
+                      
+                      # Wait for build to complete
+                      print(f"Waiting for build {build_id} to complete...")
+                      max_wait_time = 840  # 14 minutes (leave buffer for Lambda timeout)
+                      start_time = time.time()
+                      poll_interval = 10
+                      
+                      while True:
+                          elapsed = time.time() - start_time
+                          if elapsed > max_wait_time:
+                              error_msg = f"Build timed out after {max_wait_time} seconds"
+                              print(error_msg)
+                              cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': error_msg})
+                              return
+                          
+                          build_response = codebuild.batch_get_builds(ids=[build_id])
+                          build = build_response['builds'][0]
+                          build_status = build['buildStatus']
+                          
+                          print(f"Build status: {build_status} (elapsed: {int(elapsed)}s)")
+                          
+                          if build_status == 'SUCCEEDED':
+                              print(f"Build completed successfully: {build_id}")
+                              cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                                  'BuildId': build_id,
+                                  'BuildStatus': build_status
+                              })
+                              return
+                          elif build_status in ['FAILED', 'FAULT', 'TIMED_OUT', 'STOPPED']:
+                              error_msg = f"Build {build_status.lower()}: {build_id}"
+                              print(error_msg)
+                              cfnresponse.send(event, context, cfnresponse.FAILED, {
+                                  'Error': error_msg,
+                                  'BuildId': build_id,
+                                  'BuildStatus': build_status
+                              })
+                              return
+                          
+                          # Build still in progress
+                          time.sleep(poll_interval)
+                  else:
+                      print(f"No action needed for {request_type}")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                          'BuildId': 'N/A',
+                          'BuildStatus': 'SKIPPED'
+                      })
+                      
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Ref CodeBuildProjectName
+      Description: "Build workshop content from GitHub repository"
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: "aws/codebuild/standard:7.0"
+      Source:
+        Type: GITHUB
+        Location: !Ref CodeBuildGitHubRepository
+        GitCloneDepth: 1
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo "Retrieving S3 bucket name from SSM"
+                - export S3_BUCKET_NAME=$(aws ssm get-parameter --name /deep-research-workshop/s3-bucket-name --query Parameter.Value --output text)
+                - echo "Target bucket is $S3_BUCKET_NAME"
+            build:
+              commands:
+                - echo "Copying api_spec.json to S3"
+                - aws s3 cp infrastructure/lambda/api_spec.json s3://$S3_BUCKET_NAME/build/api_spec.json
+                - echo "File copied successfully"
+                - echo "Packaging Lambda function"
+                - cd infrastructure/lambda
+                - 'pip install -r requirements.txt --platform manylinux2014_aarch64 --target ./packaging/_dependencies --only-binary=:all:'
+                - python package_for_lambda.py
+                - echo "Uploading Lambda packages to S3"
+                - aws s3 cp packaging/app.zip s3://$S3_BUCKET_NAME/build/app.zip
+                - aws s3 cp packaging/dependencies.zip s3://$S3_BUCKET_NAME/build/dependencies.zip
+                - echo "Lambda packages uploaded successfully"
+      SourceVersion: !Ref CodeBuildGitHubBranch
+      TimeoutInMinutes: 10
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+
+  TriggerInitialBuild:
+    Type: Custom::TriggerBuild
+    Properties:
+      ServiceToken: !GetAtt TriggerBuildFunction.Arn
+      ProjectName: !Ref CodeBuildProject
+
 Outputs:
   StudioDomainURI:
     Description: URI of the Amazon SageMaker Studio Domain
@@ -903,3 +1158,32 @@ Outputs:
   S3BucketName:
     Description: Amazon S3 bucket name for deep research workshop
     Value: !Ref StudioBucket
+  DynamoDBTableName:
+    Description: DynamoDB table name for deep research workshop
+    Value: !Ref ResearchEvidenceTable
+  DynamoDBTableArn:
+    Description: DynamoDB table ARN for deep research workshop
+    Value: !GetAtt ResearchEvidenceTable.Arn
+  CodeBuildProjectName:
+    Description: "Name of the CodeBuild project"
+    Value: !Ref CodeBuildProject
+    Export:
+      Name: !Sub "${AWS::StackName}-CodeBuildProject"
+  CodeBuildProjectArn:
+    Description: "ARN of the CodeBuild project"
+    Value: !GetAtt CodeBuildProject.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CodeBuildProjectArn"
+  CodeBuildServiceRoleArn:
+    Description: "ARN of the CodeBuild service role"
+    Value: !GetAtt CodeBuildServiceRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CodeBuildServiceRoleArn"
+  InitialBuildId:
+    Description: "Build ID of the initial triggered build"
+    Value: !GetAtt TriggerInitialBuild.BuildId
+    Export:
+      Name: !Sub "${AWS::StackName}-InitialBuildId"
+  InitialBuildStatus:
+    Description: "Status of the initial triggered build"
+    Value: !GetAtt TriggerInitialBuild.BuildStatus
