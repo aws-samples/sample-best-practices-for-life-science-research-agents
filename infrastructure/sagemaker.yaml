@@ -428,6 +428,12 @@ Resources:
                 Action:
                   - secretsmanager:CreateSecret
                 Resource: "*"
+              - Sid: AgentCoreGatewayCleanUp
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:DeleteGateway
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/researchapp*
 
   StudioDomain:
     Type: AWS::SageMaker::Domain
