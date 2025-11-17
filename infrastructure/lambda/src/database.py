@@ -2529,7 +2529,7 @@ def query_monarch(
 def query_openfda(
     prompt=None,
     endpoint=None,
-    max_results=100,
+    max_results=5,
     verbose=True,
     search_params=None,
     sort_params=None,

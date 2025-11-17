@@ -11,7 +11,7 @@ import uuid
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
-MAX_TOOLS=10
+MAX_TOOLS=5
 
 SYSTEM_PROMPT = """
     You are a Healthcare Research Infrastructure Assistant specializing in AWS-powered life sciences solutions.

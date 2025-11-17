@@ -459,7 +459,7 @@
   },
   {
     "name": "query_openfda",
-    "description": "Query the OpenFDA API using natural language or direct parameters.",
+    "description": "Query the OpenFDA API for drug adverse events, drug product labeling, and recall enforcement reports using natural language or direct parameters.",
     "inputSchema": {
       "type": "object",
       "properties": {

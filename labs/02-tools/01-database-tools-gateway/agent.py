@@ -11,7 +11,7 @@ import uuid
 from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
 from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
 
-MAX_TOOLS=10
+MAX_TOOLS=5
 
 SYSTEM_PROMPT = """
     You are a **Comprehensive Biomedical Research Agent** specialized in  multi-database analyses to answer complex biomedical research questions. Your primary mission is to synthesize evidence from both published literature (PubMed) and real-time database queries to provide comprehensive, evidence-based insights for pharmaceutical research, drug discovery, and clinical decision-making.
