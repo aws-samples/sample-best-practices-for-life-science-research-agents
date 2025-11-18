@@ -73,7 +73,6 @@ Parameters:
     Type: String
     Description: SSM Parameter name for Cognito Domain
     Default: /deep-research-workshop/agentcore/cognito_domain
-    
 
 Conditions:
   UseSelfSignedSSLCertificate:
@@ -1371,37 +1370,3 @@ Outputs:
   ApplicationURL:
     Description: URL to access the Streamlit application
     Value: !Sub "https://${ApplicationLoadBalancer.DNSName}"
-
-  Module1AgentCoreRuntimeRoleArn:
-    Description: ARN for AgentCore Runtime role
-    Value: !GetAtt Module1AgentCoreRuntimeRole.Arn
-
-  MemoryId:
-    Description: "AgentCore Memory ID"
-    Value: !Ref AgentCoreMemory
-    Export:
-      Name: !Sub "${AWS::StackName}-MemoryId"
-
-  MemoryArn:
-    Description: "AgentCore Memory ARN"
-    Value: !GetAtt AgentCoreMemory.MemoryArn
-    Export:
-      Name: !Sub "${AWS::StackName}-MemoryArn"
-
-  GatewayId:
-    Description: "AgentCore Gateway ID"
-    Value: !Ref AgentCoreGateway
-    Export:
-      Name: !Sub "${AWS::StackName}-GatewayId"
-
-  GatewayArn:
-    Description: "AgentCore Gateway ARN"
-    Value: !GetAtt AgentCoreGateway.GatewayArn
-    Export:
-      Name: !Sub "${AWS::StackName}-GatewayArn"
-
-  GatewayUrl:
-    Description: "AgentCore Gateway URL"
-    Value: !GetAtt AgentCoreGateway.GatewayUrl
-    Export:
-      Name: !Sub "${AWS::StackName}-GatewayUrl"
