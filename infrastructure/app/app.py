@@ -5,6 +5,7 @@ import uuid
 from typing import Dict, Iterator, List
 
 import boto3
+import botocore
 import streamlit as st
 from streamlit.logger import get_logger
 
