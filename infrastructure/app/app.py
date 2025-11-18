@@ -250,7 +250,11 @@ def invoke_agent_streaming(
 ) -> Iterator[str]:
     """Invoke agent and yield streaming response chunks"""
     try:
-        agentcore_client = boto3.client("bedrock-agentcore", region_name=region)
+        agentcore_client = boto3.client(
+            "bedrock-agentcore",
+            region_name=region,
+            config=botocore.config.Config(read_timeout=900, connect_timeout=5),
+        )
 
         boto3_response = agentcore_client.invoke_agent_runtime(
             agentRuntimeArn=agent_arn,
