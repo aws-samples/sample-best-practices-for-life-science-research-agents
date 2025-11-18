@@ -1161,35 +1161,3 @@ Outputs:
   StudioDomainURI:
     Description: URI of the Amazon SageMaker Studio Domain
     Value: !Sub https://${AWS::Region}.console.aws.amazon.com/sagemaker/home?region=${AWS::Region}#/studio/open/${StudioDomain}/${UserProfileName}
-  S3BucketName:
-    Description: Amazon S3 bucket name for deep research workshop
-    Value: !Ref StudioBucket
-  DynamoDBTableName:
-    Description: DynamoDB table name for deep research workshop
-    Value: !Ref ResearchEvidenceTable
-  DynamoDBTableArn:
-    Description: DynamoDB table ARN for deep research workshop
-    Value: !GetAtt ResearchEvidenceTable.Arn
-  CodeBuildProjectName:
-    Description: "Name of the CodeBuild project"
-    Value: !Ref CodeBuildProject
-    Export:
-      Name: !Sub "${AWS::StackName}-CodeBuildProject"
-  CodeBuildProjectArn:
-    Description: "ARN of the CodeBuild project"
-    Value: !GetAtt CodeBuildProject.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-CodeBuildProjectArn"
-  CodeBuildServiceRoleArn:
-    Description: "ARN of the CodeBuild service role"
-    Value: !GetAtt CodeBuildServiceRole.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-CodeBuildServiceRoleArn"
-  InitialBuildId:
-    Description: "Build ID of the initial triggered build"
-    Value: !GetAtt TriggerInitialBuild.BuildId
-    Export:
-      Name: !Sub "${AWS::StackName}-InitialBuildId"
-  InitialBuildStatus:
-    Description: "Status of the initial triggered build"
-    Value: !GetAtt TriggerInitialBuild.BuildStatus
