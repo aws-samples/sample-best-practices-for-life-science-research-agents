@@ -1,7 +1,7 @@
-boto3 
-defusedxml 
-httpx
-strands-agents
-strands-agents-tools
-bedrock_agentcore
-paper-qa
+boto3==1.42.33
+defusedxml==0.7.1
+httpx==0.28.1
+strands-agents==1.23.0
+strands-agents-tools==0.2.19
+bedrock_agentcore==1.2.0
+paper-qa[pypdf]==2026.1.5
