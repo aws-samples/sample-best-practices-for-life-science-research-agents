@@ -4,4 +4,5 @@ httpx==0.28.1
 strands-agents==1.23.0
 strands-agents-tools==0.2.19
 bedrock_agentcore==1.2.0
-paper-qa[pypdf]==2026.1.5
+paper-qa==2026.3.18
+litellm==1.82.6
