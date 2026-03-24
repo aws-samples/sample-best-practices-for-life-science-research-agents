@@ -23,12 +23,12 @@ warnings.filterwarnings("ignore", module="litellm")
 COMMERCIAL_USE_ONLY = os.getenv("COMMERCIAL_USE_ONLY", True)
 
 # Paper-QA Model Configuration
-PAPERQA_LLM = os.getenv("PAPERQA_LLM", "global.anthropic.claude-sonnet-4-20250514-v1:0")
+PAPERQA_LLM = os.getenv("PAPERQA_LLM", "global.anthropic.claude-sonnet-4-6")
 PAPERQA_SUMMARY_LLM = os.getenv(
-    "PAPERQA_SUMMARY_LLM", "bedrock/openai.gpt-oss-120b-1:0"
+    "PAPERQA_SUMMARY_LLM", "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 )
 PAPERQA_AGENT_LLM = os.getenv(
-    "PAPERQA_AGENT_LLM", "global.anthropic.claude-sonnet-4-20250514-v1:0"
+    "PAPERQA_AGENT_LLM", "global.anthropic.claude-sonnet-4-6"
 )
 PAPERQA_EMBEDDING = os.getenv(
     "PAPERQA_EMBEDDING", "bedrock/amazon.titan-embed-text-v2:0"

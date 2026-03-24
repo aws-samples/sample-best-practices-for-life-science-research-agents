@@ -84,7 +84,7 @@ def _query_llm_for_api(
     prompt,
     schema,
     system_template,
-    model="global.anthropic.claude-sonnet-4-20250514-v1:0",
+    model="global.anthropic.claude-sonnet-4-6",
 ):
     """Query Bedrock for generating API calls using direct Converse API."""
     client = get_bedrock_client()

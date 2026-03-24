@@ -7,7 +7,7 @@ from strands.models import BedrockModel
 from gather_evidence import gather_evidence_tool
 from search_pmc import search_pmc_tool
 
-MODEL_ID = "global.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID = "global.anthropic.claude-sonnet-4-6"
 
 SYSTEM_PROMPT = """You are a life science research assistant. When given a scientific question, follow this process:
 

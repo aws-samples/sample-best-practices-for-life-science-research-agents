@@ -52,7 +52,7 @@ async def strands_agent_bedrock(payload, context):
 
     # Create model
     model = BedrockModel(
-        model_id="global.anthropic.claude-sonnet-4-20250514-v1:0",
+        model_id="global.anthropic.claude-sonnet-4-6",
         max_tokens=10000,
         additional_request_fields={
             "anthropic_beta": ["interleaved-thinking-2025-05-14"],
