@@ -1,5 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
+import json
 import logging
 import os
 import re
@@ -21,6 +22,7 @@ warnings.filterwarnings("ignore", module="litellm")
 
 # Global configuration for commercial use filtering
 COMMERCIAL_USE_ONLY = os.getenv("COMMERCIAL_USE_ONLY", True)
+COMMERCIAL_LICENSES = {"CC0", "CC BY", "CC BY-SA", "CC BY-ND"}
 
 # Paper-QA Model Configuration
 PAPERQA_LLM = os.getenv("PAPERQA_LLM", "global.anthropic.claude-sonnet-4-6")
@@ -325,48 +327,48 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
 
         # S3 configuration
         bucket = "pmc-oa-opendata"
-        commercial_key = f"oa_comm/txt/all/{pmc_id}.txt"
-        noncommercial_key = f"oa_noncomm/txt/all/{pmc_id}.txt"
+        article_version = f"{pmc_id}.1"
+        text_key = f"{article_version}/{article_version}.txt"
+        metadata_key = f"{article_version}/{article_version}.json"
         local_text_folder = f"my_papers/{pmc_id}/txt"
         local_index_folder = f"my_papers/{pmc_id}/index"
 
-        # Step 2: Try to download from commercial bucket first
+        # Step 2: Try to download article text
         local_file_path = None
         try:
-            logger.debug(f"Checking commercial bucket for {pmc_id}")
             local_file_path = _download_from_s3(
-                bucket, commercial_key, local_folder=local_text_folder
+                bucket, text_key, local_folder=local_text_folder
             )
-            logger.info(f"Successfully retrieved commercial article {pmc_id}")
-
+            logger.info(f"Successfully downloaded article {pmc_id}")
         except PMCS3Error as e:
-            if "not found" not in str(e).lower():
-                logger.warning(f"S3 error accessing commercial bucket: {str(e)}")
-                raise e
+            if "not found" in str(e).lower():
+                error_msg = f"Article {pmc_id} is not available in the PMC Article Datasets on AWS"
+                logger.info(error_msg)
+                return {
+                    "status": "error",
+                    "content": [
+                        {"text": error_msg},
+                        {"json": {"question": question, "source": pmc_id}},
+                    ],
+                }
+            raise e
 
-            # Try non-commercial bucket
-            logger.debug(f"Article {pmc_id} not found in commercial bucket")
-            if COMMERCIAL_USE_ONLY:
-                logger.warning(
-                    f"Article {pmc_id} not found in commercial bucket and COMMERCIAL_USE_ONLY is set to True"
-                )
-                raise PMCS3Error(
-                    f"Article {pmc_id} not found in commercial bucket and COMMERCIAL_USE_ONLY is set to True"
-                )
-            logger.info(f"Checking non-commercial bucket for {pmc_id}")
-
+        # Check license if COMMERCIAL_USE_ONLY is enabled
+        if COMMERCIAL_USE_ONLY:
             try:
-                local_file_path = _download_from_s3(
-                    bucket, noncommercial_key, local_folder=local_text_folder
+                metadata_path = _download_from_s3(
+                    bucket, metadata_key, local_folder=local_text_folder
                 )
-                logger.warning(
-                    f"Article {pmc_id} found in non-commercial bucket - licensing restrictions may apply"
-                )
-
-            except PMCS3Error as nc_error:
-                if "not found" in str(nc_error).lower():
-                    error_msg = f"Article {pmc_id} is not available in the PMC Open Access Subset on AWS"
-                    logger.info(error_msg)
+                with open(metadata_path) as f:
+                    metadata = json.load(f)
+                license_code = metadata.get("license_code")
+                if license_code not in COMMERCIAL_LICENSES:
+                    error_msg = (
+                        f"Article {pmc_id} license '{license_code}' does not permit "
+                        f"commercial use and COMMERCIAL_USE_ONLY is set to True"
+                    )
+                    logger.warning(error_msg)
+                    os.remove(local_file_path)
                     return {
                         "status": "error",
                         "content": [
@@ -374,8 +376,10 @@ def gather_evidence(pmc_id: str, question: str) -> dict:
                             {"json": {"question": question, "source": pmc_id}},
                         ],
                     }
-                else:
-                    raise nc_error
+            except PMCS3Error:
+                logger.warning(f"Could not retrieve metadata for {pmc_id}, skipping license check")
+        elif not COMMERCIAL_USE_ONLY:
+            logger.info(f"COMMERCIAL_USE_ONLY is disabled, skipping license check for {pmc_id}")
 
         # Step 3: Use paper-qa to answer the question
         logger.info(f"Processing paper with paper-qa for question: {question}")
