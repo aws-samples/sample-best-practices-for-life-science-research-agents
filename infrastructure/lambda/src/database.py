@@ -45,7 +45,7 @@ def invoke_bedrock_model(
     user_message,
     max_tokens=2000,
     temperature=0,
-    top_p=0.9,
+    # top_p=0.9,
 ):
     """Invoke Bedrock model using Converse API."""
     try:
@@ -56,7 +56,7 @@ def invoke_bedrock_model(
             inferenceConfig={
                 "temperature": temperature,
                 "maxTokens": max_tokens,
-                "topP": top_p,
+                # "topP": top_p,
             },
         )
         print("response is")
