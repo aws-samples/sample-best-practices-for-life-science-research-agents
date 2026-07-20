@@ -155,7 +155,7 @@ def generate_report(prompt: str, evidence_ids: list = []) -> str:
 
     logger.info("Invoking Anthropic Claude citations API")
     response = bedrock_client.invoke_model(
-        modelId="us.anthropic.claude-sonnet-4-20250514-v1:0",
+        modelId="global.anthropic.claude-sonnet-4-6",
         contentType="application/json",
         accept="application/json",
         body=json.dumps(request_body),
