@@ -554,30 +554,6 @@
     }
   },
   {
-    "name": "query_gnomad",
-    "description": "Query gnomAD for variants in a gene using natural language or direct gene symbol.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "prompt": {
-          "type": "string",
-          "description": "Natural language query about genetic variants"
-        },
-        "gene_symbol": {
-          "type": "string",
-          "description": "Gene symbol (e.g., \"BRCA1\")"
-        },
-        "verbose": {
-          "type": "boolean",
-          "description": "Whether to return detailed query results"
-        }
-      },
-      "required": [
-        "prompt"
-      ]
-    }
-  },
-  {
     "name": "query_reactome",
     "description": "Query the Reactome database using natural language or a direct endpoint; optionally download pathway diagrams.",
     "inputSchema": {

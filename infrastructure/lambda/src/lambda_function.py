@@ -27,7 +27,7 @@ from database import (
     query_openfda,
     query_clinicaltrials,
     query_gwas_catalog,
-    query_gnomad,
+    # query_gnomad,
     query_reactome,
     query_regulomedb,
     query_pride,
@@ -167,12 +167,12 @@ def lambda_handler(event, context):
                 prompt=event.get('prompt'),
                 endpoint=event.get('endpoint')
             )
-        elif tool_name == 'query_gnomad':
-            result = query_gnomad(
-                prompt=event.get('prompt'),
-                gene_symbol=event.get('gene_symbol'),
-                variant_id=event.get('variant_id')
-            )
+        # elif tool_name == 'query_gnomad':
+        #     result = query_gnomad(
+        #         prompt=event.get('prompt'),
+        #         gene_symbol=event.get('gene_symbol'),
+        #         variant_id=event.get('variant_id')
+        #     )
         elif tool_name == 'query_reactome':
             result = query_reactome(
                 prompt=event.get('prompt'),
@@ -223,7 +223,8 @@ def lambda_handler(event, context):
                         'query_paleobiology', 'query_jaspar', 'query_worms', 'query_cbioportal',
                         'query_clinvar', 'query_geo', 'query_dbsnp', 'query_ucsc', 'query_ensembl',
                         'query_opentarget', 'query_monarch', 'query_openfda', 'query_clinicaltrials',
-                        'query_gwas_catalog', 'query_gnomad', 'query_reactome', 'query_regulomedb',
+                        # 'query_gwas_catalog', 'query_gnomad', 'query_reactome', 'query_regulomedb',
+                        'query_gwas_catalog', 'query_reactome', 'query_regulomedb',
                         'query_pride', 'query_gtopdb',  'query_mpd', 'query_emdb',
                         'query_synapse'
                     ]
