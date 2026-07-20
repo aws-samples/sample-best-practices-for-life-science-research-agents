@@ -16,7 +16,8 @@ import warnings
 warnings.filterwarnings("ignore", module="litellm")
 
 # Global configuration for commercial use filtering
-COMMERCIAL_USE_ONLY = os.getenv("COMMERCIAL_USE_ONLY", True)
+COMMERCIAL_USE_ONLY = os.getenv("COMMERCIAL_USE_ONLY", "true").lower() in ("true", "1", "yes")
+COMMERCIAL_LICENSES = {"CC BY", "CC0", "CC BY-SA"}
 
 # Paper-QA Model Configuration
 PAPERQA_LLM = os.getenv("PAPERQA_LLM", "global.anthropic.claude-sonnet-4-6")
@@ -264,48 +265,62 @@ def gather_evidence(pmcid: str, question: str, source: Optional[str] = None) -> 
 
         # S3 configuration
         bucket = "pmc-oa-opendata"
-        commercial_key = f"oa_comm/txt/all/{pmcid}.txt"
-        noncommercial_key = f"oa_noncomm/txt/all/{pmcid}.txt"
         local_text_folder = f"my_papers/{pmcid}/txt"
         local_index_folder = f"my_papers/{pmcid}/index"
 
-        # Step 2: Try to download from commercial bucket first
+        # Step 2: Discover the article's versioned key and check license
         local_file_path = None
         try:
-            logger.debug(f"Checking commercial bucket for {pmcid}")
-            local_file_path = _download_from_s3(
-                bucket, commercial_key, local_folder=local_text_folder
+            from botocore import UNSIGNED
+            from botocore.config import Config as BotoConfig
+            import json as _json
+
+            s3_client = boto3.client(
+                "s3",
+                region_name="us-east-1",
+                config=BotoConfig(signature_version=UNSIGNED),
             )
-            logger.info(f"Successfully retrieved commercial article {pmcid}")
+            response = s3_client.list_objects_v2(
+                Bucket=bucket, Prefix=f"{pmcid}.", MaxKeys=20
+            )
+            txt_key = None
+            json_key = None
+            for obj in response.get("Contents", []):
+                if obj["Key"].endswith(".txt"):
+                    txt_key = obj["Key"]
+                elif obj["Key"].endswith(".json"):
+                    json_key = obj["Key"]
 
-        except PMCS3Error as e:
-            if "not found" not in str(e).lower():
-                logger.warning(f"S3 error accessing commercial bucket: {str(e)}")
-                raise e
+            if txt_key is None:
+                error_msg = f"Article {pmcid} is not available in the PMC Open Access Subset on AWS"
+                logger.info(error_msg)
+                return {
+                    "status": "error",
+                    "content": [
+                        {"text": error_msg},
+                        {
+                            "json": {
+                                "question": question,
+                                "pmcid": pmcid,
+                                "source": source
+                                or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                            }
+                        },
+                    ],
+                }
 
-            # Try non-commercial bucket
-            logger.debug(f"Article {pmcid} not found in commercial bucket")
-            if COMMERCIAL_USE_ONLY:
-                logger.warning(
-                    f"Article {pmcid} not found in commercial bucket and COMMERCIAL_USE_ONLY is set to True"
-                )
-                raise PMCS3Error(
-                    f"Article {pmcid} not found in commercial bucket and COMMERCIAL_USE_ONLY is set to True"
-                )
-            logger.info(f"Checking non-commercial bucket for {pmcid}")
-
-            try:
-                local_file_path = _download_from_s3(
-                    bucket, noncommercial_key, local_folder=local_text_folder
-                )
-                logger.warning(
-                    f"Article {pmcid} found in non-commercial bucket - licensing restrictions may apply"
-                )
-
-            except PMCS3Error as nc_error:
-                if "not found" in str(nc_error).lower():
-                    error_msg = f"Article {pmcid} is not available in the PMC Open Access Subset on AWS"
-                    logger.info(error_msg)
+            # Check license if COMMERCIAL_USE_ONLY is enabled
+            if COMMERCIAL_USE_ONLY and json_key:
+                meta_resp = s3_client.get_object(Bucket=bucket, Key=json_key)
+                article_meta = _json.loads(meta_resp["Body"].read())
+                license_code = article_meta.get("license_code", "")
+                logger.info(f"Article {pmcid} license: {license_code}")
+                if license_code not in COMMERCIAL_LICENSES:
+                    error_msg = (
+                        f"Article {pmcid} has license '{license_code}' which is not "
+                        f"approved for commercial use. Allowed licenses: {sorted(COMMERCIAL_LICENSES)}"
+                    )
+                    logger.warning(error_msg)
                     return {
                         "status": "error",
                         "content": [
@@ -316,12 +331,20 @@ def gather_evidence(pmcid: str, question: str, source: Optional[str] = None) -> 
                                     "pmcid": pmcid,
                                     "source": source
                                     or f"https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/",
+                                    "license": license_code,
                                 }
                             },
                         ],
                     }
-                else:
-                    raise nc_error
+
+            logger.debug(f"Found article at key: {txt_key}")
+            local_file_path = _download_from_s3(
+                bucket, txt_key, local_folder=local_text_folder
+            )
+            logger.info(f"Successfully retrieved article {pmcid}")
+
+        except PMCS3Error as e:
+            raise e
 
         # Step 3: Use paper-qa to answer the question
         logger.info(f"Processing paper with paper-qa for question: {question}")
