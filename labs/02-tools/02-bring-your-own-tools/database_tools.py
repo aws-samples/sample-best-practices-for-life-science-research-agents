@@ -1,6 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
+import json
 import logging
 import os
 import re
@@ -116,12 +117,44 @@ def tool_search(gateway_endpoint, jwt_token, query, max_tools=5):
     
     if response.status_code == 200:
         tool_resp = response.json()
-        tools = tool_resp["result"]["structuredContent"]["tools"]
+        tools = _extract_tools_from_result(tool_resp.get("result", {}))
         tools = tools[:max_tools]
         return tools
     else:
         print(f"Search failed: {response.text}")
         return []
+
+
+def _extract_tools_from_result(result):
+    """Extract the tool list from an MCP tools/call result.
+
+    The Bedrock AgentCore Gateway used to return the tools under
+    ``result["structuredContent"]["tools"]``. Newer responses omit
+    ``structuredContent`` and instead return a ``content`` array of blocks,
+    each with a ``type`` and ``text`` (the text being JSON). Handle both.
+    """
+    # Preferred (legacy) shape: structuredContent.tools
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict) and "tools" in structured:
+        return structured["tools"]
+
+    # Fallback: parse the content blocks, whose text holds JSON
+    tools = []
+    for block in result.get("content", []):
+        if block.get("type") != "text":
+            continue
+        text = block.get("text", "")
+        try:
+            parsed = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(parsed, dict) and "tools" in parsed:
+            tools.extend(parsed["tools"])
+        elif isinstance(parsed, list):
+            tools.extend(parsed)
+        elif isinstance(parsed, dict) and "name" in parsed:
+            tools.append(parsed)
+    return tools
     
 def tools_to_strands_mcp_tools(tools, top_n, client):
     """Convert search results to Strands MCPAgentTool objects."""
