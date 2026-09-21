@@ -12,6 +12,6 @@ boto3
 streamlit
 streamlit-cookies-controller
 PyJWT
-mcp
+mcp==1.28.1
 aws-opentelemetry-distro
 httpx
